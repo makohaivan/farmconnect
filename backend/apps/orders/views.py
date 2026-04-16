@@ -1,9 +1,11 @@
+import traceback
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+
 from .models import Order, OrderItem
 from .serializers import OrderSerializer, PlaceOrderSerializer
 from apps.accounts.models import User
@@ -12,72 +14,88 @@ from apps.accounts.models import User
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def place_order(request):
-    """
-    POST /api/v1/orders/
-    Buyer places an order. Creates one Order per farmer in the cart.
-    Uses a database transaction so either everything saves or nothing does.
-    """
-    if request.user.role != User.ROLE_BUYER:
-        return Response({'error': 'Only buyers can place orders.'}, status=403)
+    """POST /api/v1/orders/ — Buyer places an order."""
 
+    # 1. Role check
+    if request.user.role != User.ROLE_BUYER:
+        return Response(
+            {'error': 'Only buyers can place orders.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # 2. Validate incoming data
     serializer = PlaceOrderSerializer(data=request.data)
     if not serializer.is_valid():
-        return Response({'errors': serializer.errors}, status=400)
+        return Response(
+            {'error': str(serializer.errors)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     validated_items  = serializer.validated_data['items']
     delivery_address = serializer.validated_data['delivery_address']
     notes            = serializer.validated_data.get('notes', '')
 
-    # Group items by farmer — one order per farmer
+    # 3. Group items by farmer (one order created per farmer)
     by_farmer = {}
     for item in validated_items:
-        farmer_id = item['product'].farmer_id
-        if farmer_id not in by_farmer:
-            by_farmer[farmer_id] = []
-        by_farmer[farmer_id].append(item)
+        fid = item['product'].farmer_id
+        if fid not in by_farmer:
+            by_farmer[fid] = []
+        by_farmer[fid].append(item)
 
     orders_created = []
 
-    with transaction.atomic():
-        for farmer_id, farmer_items in by_farmer.items():
-            farmer = User.objects.get(id=farmer_id)
+    try:
+        with transaction.atomic():
+            for farmer_id, farmer_items in by_farmer.items():
+                farmer = User.objects.get(id=farmer_id)
 
-            # Calculate total for this farmer's items
-            total = sum(
-                item['product'].price * item['quantity']
-                for item in farmer_items
-            )
-
-            order = Order.objects.create(
-                buyer=request.user,
-                farmer=farmer,
-                delivery_address=delivery_address,
-                notes=notes,
-                total_amount=total,
-            )
-
-            for item in farmer_items:
-                product = item['product']
-                qty     = item['quantity']
-
-                OrderItem.objects.create(
-                    order        = order,
-                    product      = product,
-                    product_name = product.name,
-                    quantity     = qty,
-                    unit         = product.unit,
-                    unit_price   = product.price,
+                # Sum up total for this farmer's portion
+                total = sum(
+                    item['product'].price * item['quantity']
+                    for item in farmer_items
                 )
 
-                # Reduce stock
-                product.quantity -= qty
-                if product.quantity == 0:
-                    product.is_available = False
-                product.save()
+                # Create the order
+                order = Order.objects.create(
+                    buyer            = request.user,
+                    farmer           = farmer,
+                    delivery_address = delivery_address,
+                    notes            = notes,
+                    total_amount     = total,
+                )
 
-            orders_created.append(order)
+                # Create order items + reduce stock
+                for item in farmer_items:
+                    product = item['product']
+                    qty     = item['quantity']
 
-    # Return the first order (most common case: one farmer per cart)
+                    OrderItem.objects.create(
+                        order        = order,
+                        product      = product,
+                        product_name = product.name,
+                        quantity     = qty,
+                        unit         = product.unit,
+                        unit_price   = product.price,
+                    )
+
+                    # Reduce stock
+                    product.quantity = max(0, product.quantity - qty)
+                    if product.quantity == 0:
+                        product.is_available = False
+                    product.save(update_fields=['quantity', 'is_available'])
+
+                orders_created.append(order)
+
+    except Exception as e:
+        # Log the full error in the Django console
+        traceback.print_exc()
+        return Response(
+            {'error': f'Order could not be saved: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    # Return the first order (buyer usually orders from one farmer at a time)
     return Response(
         OrderSerializer(orders_created[0]).data,
         status=status.HTTP_201_CREATED
@@ -87,7 +105,7 @@ def place_order(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def buyer_orders(request):
-    """GET /api/v1/orders/buyer/ — Buyer's own orders."""
+    """GET /api/v1/orders/buyer/ — All orders placed by this buyer."""
     if request.user.role != User.ROLE_BUYER:
         return Response({'error': 'Buyers only.'}, status=403)
 
@@ -95,19 +113,20 @@ def buyer_orders(request):
         buyer=request.user
     ).prefetch_related('items').select_related('farmer', 'farmer__farmerprofile')
 
-    # Optional status filter
     status_filter = request.query_params.get('status')
     if status_filter:
         orders = orders.filter(status=status_filter)
 
-    serializer = OrderSerializer(orders, many=True)
-    return Response({'count': orders.count(), 'results': serializer.data})
+    return Response({
+        'count':   orders.count(),
+        'results': OrderSerializer(orders, many=True).data,
+    })
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def farmer_orders(request):
-    """GET /api/v1/orders/farmer/ — Farmer's received orders."""
+    """GET /api/v1/orders/farmer/ — All orders received by this farmer."""
     if request.user.role != User.ROLE_FARMER:
         return Response({'error': 'Farmers only.'}, status=403)
 
@@ -119,18 +138,19 @@ def farmer_orders(request):
     if status_filter:
         orders = orders.filter(status=status_filter)
 
-    serializer = OrderSerializer(orders, many=True)
-    return Response({'count': orders.count(), 'results': serializer.data})
+    return Response({
+        'count':   orders.count(),
+        'results': OrderSerializer(orders, many=True).data,
+    })
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def order_detail(request, order_id):
-    """GET /api/v1/orders/<id>/ — Get one order."""
+    """GET /api/v1/orders/<id>/ — Full details of one order."""
     order = get_object_or_404(Order, id=order_id)
 
-    # Only buyer or farmer of this order can see it
-    if request.user != order.buyer and request.user != order.farmer:
+    if request.user not in (order.buyer, order.farmer):
         return Response({'error': 'Not authorised.'}, status=403)
 
     return Response(OrderSerializer(order).data)
@@ -139,7 +159,7 @@ def order_detail(request, order_id):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_order_status(request, order_id):
-    """PATCH /api/v1/orders/<id>/status/ — Farmer advances order status."""
+    """PATCH /api/v1/orders/<id>/status/ — Farmer advances status."""
     order = get_object_or_404(Order, id=order_id, farmer=request.user)
 
     VALID_TRANSITIONS = {
@@ -152,9 +172,15 @@ def update_order_status(request, order_id):
     new_status = request.data.get('status')
     expected   = VALID_TRANSITIONS.get(order.status)
 
+    if not expected:
+        return Response(
+            {'error': 'This order cannot be advanced further.'},
+            status=400
+        )
+
     if new_status != expected:
         return Response(
-            {'error': f'Invalid transition. Expected: {expected}'},
+            {'error': f'Next valid status is "{expected}", got "{new_status}".'},
             status=400
         )
 
@@ -175,13 +201,13 @@ def cancel_order(request, order_id):
             status=400
         )
 
-    # Restore product stock
     with transaction.atomic():
-        for item in order.items.all():
+        # Restore stock for each item
+        for item in order.items.select_related('product').all():
             if item.product:
-                item.product.quantity += item.quantity
+                item.product.quantity    += item.quantity
                 item.product.is_available = True
-                item.product.save()
+                item.product.save(update_fields=['quantity', 'is_available'])
 
         order.status = 'cancelled'
         order.save()

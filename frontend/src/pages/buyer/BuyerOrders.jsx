@@ -1,39 +1,67 @@
 /**
  * FarmConnect — Buyer Orders Page
- * View all placed orders and their current status.
  */
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth }       from '../../hooks/useAuth'
 import { getBuyerOrders, cancelOrder } from '../../api/ordersApi'
 import { Button, Logo, Alert, Spinner } from '../../components/ui'
+import OrderSummary from '../../components/OrderSummary'
 
 const STATUS_STYLES = {
-  pending:    { badge: 'bg-yellow-100 text-yellow-800',  label: 'Pending',    icon: '🕐', desc: 'Waiting for farmer to confirm' },
-  confirmed:  { badge: 'bg-blue-100 text-blue-800',      label: 'Confirmed',  icon: '✅', desc: 'Farmer has confirmed your order' },
-  packed:     { badge: 'bg-purple-100 text-purple-800',  label: 'Packed',     icon: '📦', desc: 'Your order is packed and ready' },
-  dispatched: { badge: 'bg-orange-100 text-orange-800',  label: 'Dispatched', icon: '🚚', desc: 'Your order is on the way!' },
-  delivered:  { badge: 'bg-green-100 text-green-800',    label: 'Delivered',  icon: '🎉', desc: 'Order delivered successfully' },
-  cancelled:  { badge: 'bg-red-100 text-red-800',        label: 'Cancelled',  icon: '❌', desc: 'Order was cancelled' },
+  pending:    { badge: 'bg-yellow-100 text-yellow-800', label: 'Pending',    icon: '🕐', desc: 'Waiting for farmer to confirm' },
+  confirmed:  { badge: 'bg-blue-100 text-blue-800',    label: 'Confirmed',  icon: '✅', desc: 'Farmer has confirmed your order' },
+  packed:     { badge: 'bg-purple-100 text-purple-800',label: 'Packed',     icon: '📦', desc: 'Your order is packed and ready' },
+  dispatched: { badge: 'bg-orange-100 text-orange-800',label: 'Dispatched', icon: '🚚', desc: 'Your order is on the way!' },
+  delivered:  { badge: 'bg-green-100 text-green-800',  label: 'Delivered',  icon: '🎉', desc: 'Order delivered successfully' },
+  cancelled:  { badge: 'bg-red-100 text-red-800',      label: 'Cancelled',  icon: '❌', desc: 'Order was cancelled' },
 }
-
 const STATUS_FLOW = ['pending', 'confirmed', 'packed', 'dispatched', 'delivered']
 
+const PRINT_STYLES = `
+  @media print {
+    body * { visibility: hidden !important; }
+    #order-summary-print, #order-summary-print * { visibility: visible !important; }
+    #order-summary-print {
+      position: fixed !important;
+      top: 0 !important; left: 0 !important;
+      width: 100% !important;
+      padding: 24px !important;
+      background: white !important;
+    }
+    .no-print { display: none !important; }
+  }
+`
+
+function injectPrintStyles() {
+  if (!document.getElementById('farmconnect-print-styles')) {
+    const style = document.createElement('style')
+    style.id = 'farmconnect-print-styles'
+    style.innerHTML = PRINT_STYLES
+    document.head.appendChild(style)
+  }
+}
+
 function OrderCard({ order, onCancel }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded,   setExpanded]   = useState(false)
   const [cancelling, setCancelling] = useState(false)
-  const s = STATUS_STYLES[order.status] || STATUS_STYLES.pending
+  const [showPrint,  setShowPrint]  = useState(false)
+
+  const s           = STATUS_STYLES[order.status] || STATUS_STYLES.pending
   const currentStep = STATUS_FLOW.indexOf(order.status)
   const canCancel   = order.status === 'pending'
 
   const handleCancel = async () => {
     if (!window.confirm('Are you sure you want to cancel this order?')) return
     setCancelling(true)
-    try {
-      await onCancel(order.id)
-    } finally {
-      setCancelling(false)
-    }
+    try { await onCancel(order.id) }
+    finally { setCancelling(false) }
+  }
+
+  const handlePrint = () => {
+    injectPrintStyles()
+    setShowPrint(true)
+    setTimeout(() => window.print(), 200)
   }
 
   return (
@@ -51,7 +79,7 @@ function OrderCard({ order, onCancel }) {
             </div>
             <p className="text-xs text-gray-500">{s.desc}</p>
             <p className="text-xs text-gray-400 mt-1">
-              Placed: {new Date(order.created_at).toLocaleDateString('en-UG', {
+              {new Date(order.created_at).toLocaleDateString('en-UG', {
                 day: 'numeric', month: 'short', year: 'numeric',
                 hour: '2-digit', minute: '2-digit'
               })}
@@ -65,12 +93,12 @@ function OrderCard({ order, onCancel }) {
           </div>
         </div>
 
-        {/* Progress bar — only for active orders */}
+        {/* Progress bar */}
         {order.status !== 'cancelled' && (
-          <div className="flex items-center gap-1 mb-3">
-            {STATUS_FLOW.map((s, i) => (
-              <div key={s} className="flex items-center gap-1 flex-1">
-                <div className={`h-2 rounded-full w-full transition-colors ${
+          <div className="flex items-center gap-1">
+            {STATUS_FLOW.map((st, i) => (
+              <div key={st} className="flex-1">
+                <div className={`h-2 rounded-full ${
                   i <= currentStep ? 'bg-primary-600' : 'bg-gray-200'
                 }`} />
               </div>
@@ -78,14 +106,12 @@ function OrderCard({ order, onCancel }) {
           </div>
         )}
 
-        {/* Farmer and delivery info */}
-        <div className="text-xs text-gray-500 space-y-0.5">
-          {order.farmer_name && (
-            <p>🌾 Farmer: <span className="text-gray-700 font-medium">{order.farmer_name}</span></p>
+        {/* Delivery info */}
+        <div className="text-xs text-gray-500 space-y-0.5 mt-2">
+          {order.farm_name && (
+            <p>🌾 Farmer: <span className="font-medium text-gray-700">{order.farm_name}</span></p>
           )}
-          {order.delivery_address && (
-            <p>📍 {order.delivery_address}</p>
-          )}
+          {order.delivery_address && <p>📍 {order.delivery_address}</p>}
         </div>
       </div>
 
@@ -93,23 +119,21 @@ function OrderCard({ order, onCancel }) {
       <div className="border-t border-gray-100">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full px-5 py-2.5 text-left text-xs text-primary-600
+          className="w-full px-5 py-2.5 text-xs text-primary-600
                      hover:bg-gray-50 font-medium flex justify-between"
         >
           <span>{expanded ? 'Hide items' : 'View items'}</span>
           <span>{expanded ? '▲' : '▼'}</span>
         </button>
-
         {expanded && (
-          <div className="px-5 pb-4 space-y-2">
+          <div className="px-5 pb-3 space-y-1">
             {order.items?.map((item, i) => (
-              <div key={i} className="flex justify-between items-center
-                                      text-sm py-2 border-b border-gray-50 last:border-0">
+              <div key={i} className="flex justify-between text-sm py-2
+                                      border-b border-gray-50 last:border-0">
                 <div>
                   <p className="font-medium text-gray-800">{item.product_name}</p>
                   <p className="text-xs text-gray-400">
-                    {item.quantity} {item.unit} ×
-                    UGX {Number(item.unit_price).toLocaleString()}
+                    {item.quantity} {item.unit} × UGX {Number(item.unit_price).toLocaleString()}
                   </p>
                 </div>
                 <p className="font-semibold text-gray-700">
@@ -121,17 +145,31 @@ function OrderCard({ order, onCancel }) {
         )}
       </div>
 
-      {/* Cancel button */}
-      {canCancel && (
-        <div className="px-5 pb-4 border-t border-gray-100 pt-3">
-          <Button
-            variant="danger"
-            size="sm"
-            loading={cancelling}
-            onClick={handleCancel}
-          >
-            Cancel Order
-          </Button>
+      {/* Actions */}
+      <div className="px-5 pb-4 pt-3 border-t border-gray-100
+                      flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          {canCancel && (
+            <Button variant="danger" size="sm"
+              loading={cancelling} onClick={handleCancel}>
+              Cancel Order
+            </Button>
+          )}
+        </div>
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg
+                     bg-farm-dark text-white hover:bg-blue-900 font-medium
+                     transition-colors"
+        >
+          🖨️ Print / Save Summary
+        </button>
+      </div>
+
+      {/* Hidden print area */}
+      {showPrint && (
+        <div style={{ display: 'none' }}>
+          <OrderSummary order={order} mode="buyer" />
         </div>
       )}
     </div>
@@ -142,13 +180,15 @@ export default function BuyerOrders() {
   const { user, logout } = useAuth()
   const location         = useLocation()
 
-  const [orders,      setOrders]      = useState([])
-  const [loading,     setLoading]     = useState(true)
-  const [error,       setError]       = useState('')
-  const [success,     setSuccess]     = useState(
-    location.state?.success ? '✅ Order placed successfully! The farmer will confirm shortly.' : ''
+  const [orders,       setOrders]       = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState('')
+  const [success,      setSuccess]      = useState(
+    location.state?.success
+      ? '✅ Order placed! The farmer will confirm shortly. Print your summary below.'
+      : ''
   )
-  const [statusFilter,setStatusFilter]= useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   useEffect(() => {
     getBuyerOrders()
@@ -158,7 +198,7 @@ export default function BuyerOrders() {
   }, [])
 
   useEffect(() => {
-    if (success) setTimeout(() => setSuccess(''), 5000)
+    if (success) setTimeout(() => setSuccess(''), 6000)
   }, [success])
 
   const handleCancel = async (orderId) => {
@@ -179,9 +219,8 @@ export default function BuyerOrders() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4
-                         flex items-center justify-between">
+                         flex items-center justify-between no-print">
         <Logo />
         <div className="flex items-center gap-3">
           <Link to="/buyer/dashboard"
@@ -197,20 +236,20 @@ export default function BuyerOrders() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-8 fade-in">
+      <main className="max-w-3xl mx-auto px-6 py-8 fade-in no-print">
         <h1 className="text-2xl font-bold text-farm-dark mb-6">My Orders</h1>
 
         {success && <div className="mb-4"><Alert type="success" message={success} /></div>}
         {error   && <div className="mb-4"><Alert type="error"   message={error}   /></div>}
 
-        {/* Status Filters */}
+        {/* Filters */}
         <div className="flex gap-2 flex-wrap mb-6">
           {[
             { value: '',           label: `All (${orders.length})` },
-            { value: 'pending',    label: `🕐 Pending (${orders.filter(o=>o.status==='pending').length})` },
-            { value: 'confirmed',  label: `✅ Confirmed (${orders.filter(o=>o.status==='confirmed').length})` },
-            { value: 'dispatched', label: `🚚 On the Way (${orders.filter(o=>o.status==='dispatched').length})` },
-            { value: 'delivered',  label: `🎉 Delivered (${orders.filter(o=>o.status==='delivered').length})` },
+            { value: 'pending',    label: `🕐 Pending` },
+            { value: 'confirmed',  label: `✅ Confirmed` },
+            { value: 'dispatched', label: `🚚 On the Way` },
+            { value: 'delivered',  label: `🎉 Delivered` },
           ].map(f => (
             <button key={f.value} onClick={() => setStatusFilter(f.value)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -223,7 +262,6 @@ export default function BuyerOrders() {
           ))}
         </div>
 
-        {/* Orders */}
         {loading ? (
           <div className="flex justify-center py-20">
             <Spinner size="lg" color="green" />
@@ -235,9 +273,7 @@ export default function BuyerOrders() {
               {statusFilter ? 'No orders with this status' : 'No orders yet'}
             </h2>
             <p className="text-gray-500 text-sm mt-2 mb-6">
-              {statusFilter
-                ? 'Try a different filter above.'
-                : 'Browse fresh produce and place your first order!'}
+              {statusFilter ? 'Try a different filter.' : 'Browse products and place your first order!'}
             </p>
             {!statusFilter && (
               <Link to="/buyer/products"><Button>Browse Products</Button></Link>

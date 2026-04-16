@@ -1,15 +1,12 @@
 /**
  * FarmConnect — Cart Store (Zustand)
  *
- * Manages the shopping cart entirely on the frontend.
- * Cart items are stored in memory (and localStorage for persistence).
- * When the buyer checks out, the cart is sent to the backend as one order.
+ * Uses Zustand persist middleware so the cart survives page refreshes.
+ * Items are saved to localStorage automatically.
  *
- * Each cart item has:
- *   { product, quantity }
- *
- * We store the full product object so we can show name, price, image
- * without extra API calls.
+ * NOTE: Zustand does not support getters on the state object.
+ * Computed values (totalItems, totalAmount) are derived inside
+ * each component using useCartStore(state => ...) selectors.
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -17,31 +14,28 @@ import { persist } from 'zustand/middleware'
 export const useCartStore = create(
   persist(
     (set, get) => ({
-      items: [],   // Array of { product, quantity }
+      items: [],  // Array of { product, quantity }
 
-      // ── Add to cart ───────────────────────────────────────────────────────
-      // If product already in cart, increase quantity
+      // ── Add item (or increase qty if already exists) ──────────────────────
       addItem: (product, quantity = 1) => {
-        const items    = get().items
-        const existing = items.find(i => i.product.id === product.id)
-
+        const existing = get().items.find(i => i.product.id === product.id)
         if (existing) {
           set({
-            items: items.map(i =>
+            items: get().items.map(i =>
               i.product.id === product.id
                 ? { ...i, quantity: i.quantity + quantity }
                 : i
             )
           })
         } else {
-          set({ items: [...items, { product, quantity }] })
+          set({ items: [...get().items, { product, quantity }] })
         }
       },
 
-      // ── Update quantity of a specific item ────────────────────────────────
+      // ── Update quantity (removes item if qty goes to 0) ───────────────────
       updateQuantity: (productId, quantity) => {
         if (quantity <= 0) {
-          get().removeItem(productId)
+          set({ items: get().items.filter(i => i.product.id !== productId) })
           return
         }
         set({
@@ -51,27 +45,21 @@ export const useCartStore = create(
         })
       },
 
-      // ── Remove one item ───────────────────────────────────────────────────
+      // ── Remove a single item ──────────────────────────────────────────────
       removeItem: (productId) => {
         set({ items: get().items.filter(i => i.product.id !== productId) })
       },
 
-      // ── Clear entire cart ─────────────────────────────────────────────────
+      // ── Clear everything ──────────────────────────────────────────────────
       clearCart: () => set({ items: [] }),
-
-      // ── Computed values ───────────────────────────────────────────────────
-      get totalItems() {
-        return get().items.reduce((sum, i) => sum + i.quantity, 0)
-      },
-
-      get totalAmount() {
-        return get().items.reduce(
-          (sum, i) => sum + Number(i.product.price) * i.quantity, 0
-        )
-      },
     }),
     {
-      name: 'farmconnect-cart',   // localStorage key
+      name: 'farmconnect-cart',  // localStorage key
     }
   )
 )
+
+// ── Selector helpers — use these in components ────────────────────────────
+// Usage: const total = useCartStore(cartTotal)
+export const cartTotal      = s => s.items.reduce((sum, i) => sum + Number(i.product.price) * i.quantity, 0)
+export const cartItemCount  = s => s.items.reduce((sum, i) => sum + i.quantity, 0)

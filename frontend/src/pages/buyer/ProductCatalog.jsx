@@ -5,13 +5,13 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { useCartStore } from '../../store/cartStore'
+import { useCartStore, cartItemCount } from '../../store/cartStore'
 import { getProducts, getCategories } from '../../api/productsApi'
 import { Button, Logo, Spinner, Alert } from '../../components/ui'
 
 // ── Cart Badge in header ──────────────────────────────────────────────────────
 function CartBadge() {
-  const totalItems = useCartStore(s => s.items.reduce((sum, i) => sum + i.quantity, 0))
+  const totalItems = useCartStore(cartItemCount)
   return (
     <Link to="/buyer/cart"
       className="relative flex items-center gap-2 px-3 py-2 rounded-lg

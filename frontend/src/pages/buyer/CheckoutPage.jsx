@@ -1,54 +1,43 @@
 /**
  * FarmConnect — Checkout Page
- * Buyer confirms delivery address and places the order.
+ *
+ * Two states:
+ *  1. CHECKOUT FORM — buyer reviews order and enters delivery address
+ *  2. ORDER CONFIRMED — order placed, shows printable order summary
  */
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useCartStore } from '../../store/cartStore'
-import { useAuthStore } from '../../store/authStore'
+import { useCartStore, cartTotal, cartItemCount } from '../../store/cartStore'
 import { useAuth }      from '../../hooks/useAuth'
 import { placeOrder }   from '../../api/ordersApi'
-import { Button, Logo, Input, Alert } from '../../components/ui'
+import { Button, Logo, Alert } from '../../components/ui'
+import OrderSummary from '../../components/OrderSummary'
 
 export default function CheckoutPage() {
-  const { user, logout }           = useAuth()
-  const { items, totalAmount,
-          clearCart }              = useCartStore()
-  const navigate                   = useNavigate()
+  const { user, logout }  = useAuth()
+  const { items, clearCart } = useCartStore()
+  const total             = useCartStore(cartTotal)
+  const totalItems        = useCartStore(cartItemCount)
+  const navigate          = useNavigate()
 
-  const savedAddress = user?.buyerprofile?.delivery_address || ''
+  const [address,   setAddress]   = useState(user?.buyerprofile?.delivery_address || '')
+  const [notes,     setNotes]     = useState('')
+  const [loading,   setLoading]   = useState(false)
+  const [error,     setError]     = useState('')
+  const [confirmedOrder, setConfirmedOrder] = useState(null)  // set after order placed
 
-  const [address, setAddress] = useState(savedAddress)
-  const [notes,   setNotes]   = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
-
-  const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
-
-  // Group items by farmer so buyer can see which farmer each item comes from
+  // Group items by farmer for the summary
   const byFarmer = items.reduce((acc, item) => {
-    const key = item.product.farmer?.id || 'unknown'
-    if (!acc[key]) {
-      acc[key] = {
-        farmer: item.product.farmer,
-        items:  [],
-        subtotal: 0,
-      }
-    }
-    acc[key].items.push(item)
-    acc[key].subtotal += Number(item.product.price) * item.quantity
+    const fid = item.product.farmer?.id || 'unknown'
+    if (!acc[fid]) acc[fid] = { farmer: item.product.farmer, items: [], subtotal: 0 }
+    acc[fid].items.push(item)
+    acc[fid].subtotal += Number(item.product.price) * item.quantity
     return acc
   }, {})
 
   const handlePlaceOrder = async () => {
-    if (!address.trim()) {
-      setError('Please enter a delivery address.')
-      return
-    }
-    if (items.length === 0) {
-      setError('Your cart is empty.')
-      return
-    }
+    if (!address.trim()) { setError('Please enter a delivery address.'); return }
+    if (items.length === 0) { setError('Your cart is empty.'); return }
 
     setLoading(true)
     setError('')
@@ -63,12 +52,9 @@ export default function CheckoutPage() {
           unit_price: i.product.price,
         }))
       }
-
       const order = await placeOrder(orderData)
       clearCart()
-      navigate('/buyer/orders', {
-        state: { success: true, orderId: order.id }
-      })
+      setConfirmedOrder(order)   // switch to confirmation view
     } catch (err) {
       setError(
         err.response?.data?.error ||
@@ -80,6 +66,57 @@ export default function CheckoutPage() {
     }
   }
 
+  // ── STATE 2: Order confirmed — show printable summary ─────────────────────
+  if (confirmedOrder) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b border-gray-200 px-6 py-4
+                           flex items-center justify-between no-print">
+          <Logo />
+          <div className="flex items-center gap-3">
+            <Link to="/buyer/orders"
+              className="text-sm text-primary-600 hover:underline font-medium">
+              View All Orders
+            </Link>
+            <Button variant="secondary" size="sm" onClick={logout}>Sign out</Button>
+          </div>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-6 py-8 fade-in">
+          {/* Success banner */}
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-5
+                          flex items-center gap-4 mb-6 no-print">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center
+                            justify-center text-2xl shrink-0">
+              🎉
+            </div>
+            <div>
+              <h1 className="font-bold text-green-800 text-lg">Order Placed Successfully!</h1>
+              <p className="text-green-700 text-sm mt-0.5">
+                Your order has been sent to the farmer. Print or save the summary below
+                for your records.
+              </p>
+            </div>
+          </div>
+
+          {/* Printable order summary */}
+          <OrderSummary order={confirmedOrder} mode="buyer" />
+
+          {/* Navigation buttons */}
+          <div className="flex gap-3 mt-6 no-print">
+            <Link to="/buyer/products" className="flex-1">
+              <Button variant="secondary" fullWidth>Continue Shopping</Button>
+            </Link>
+            <Link to="/buyer/orders" className="flex-1">
+              <Button fullWidth>View My Orders</Button>
+            </Link>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // ── STATE 1: Checkout form ────────────────────────────────────────────────
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -96,7 +133,6 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4
                          flex items-center justify-between">
         <Logo />
@@ -114,60 +150,80 @@ export default function CheckoutPage() {
 
         {error && <div className="mb-4"><Alert type="error" message={error} /></div>}
 
-        {/* Order Items Summary */}
+        {/* Order Items */}
         <div className="card p-5 mb-5">
           <h2 className="font-semibold text-farm-dark mb-4">
-            Order Summary ({totalItems} items)
+            Order Summary
+            <span className="font-normal text-gray-500 text-sm ml-2">
+              ({totalItems} item{totalItems !== 1 ? 's' : ''})
+            </span>
           </h2>
+
           {Object.values(byFarmer).map((group, idx) => (
-            <div key={idx} className="mb-4 last:mb-0">
-              <p className="text-xs font-semibold text-gray-500 uppercase
-                            tracking-wide mb-2">
-                🌾 {group.farmer?.farm_name || group.farmer?.first_name || 'Farmer'}
-                {group.farmer?.location && ` · ${group.farmer.location}`}
-              </p>
+            <div key={idx} className="mb-5 last:mb-0">
+              {/* Farmer header */}
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                <span className="text-lg">🌾</span>
+                <div>
+                  <p className="text-sm font-semibold text-farm-dark">
+                    {group.farmer?.farm_name || group.farmer?.first_name || 'Farmer'}
+                  </p>
+                  {group.farmer?.location && (
+                    <p className="text-xs text-gray-400">📍 {group.farmer.location}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Items */}
               {group.items.map(item => (
                 <div key={item.product.id}
-                  className="flex justify-between items-center py-2
-                             border-b border-gray-50 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0">
-                      {item.product.image_url ? (
-                        <img src={item.product.image_url} alt={item.product.name}
-                          className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-lg">
-                          {item.product.category_icon || '🌾'}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{item.product.name}</p>
-                      <p className="text-xs text-gray-400">
-                        {item.quantity} {item.product.unit} ×
-                        UGX {Number(item.product.price).toLocaleString()}
-                      </p>
-                    </div>
+                  className="flex items-center gap-3 py-2.5 border-b
+                             border-gray-50 last:border-0">
+                  {/* Image */}
+                  <div className="w-12 h-12 rounded-lg bg-gray-100
+                                  overflow-hidden shrink-0">
+                    {item.product.image_url ? (
+                      <img src={item.product.image_url} alt={item.product.name}
+                        className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center
+                                      justify-center text-xl">
+                        {item.product.category_icon || '🌾'}
+                      </div>
+                    )}
                   </div>
-                  <p className="font-semibold text-sm text-gray-700">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">
+                      {item.product.name}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {item.quantity} {item.product.unit} ×
+                      UGX {Number(item.product.price).toLocaleString()}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-700 shrink-0">
                     UGX {(Number(item.product.price) * item.quantity).toLocaleString()}
                   </p>
                 </div>
               ))}
-              <div className="flex justify-between text-sm font-medium
-                              text-gray-600 pt-2">
-                <span>Subtotal from {group.farmer?.farm_name || 'this farmer'}</span>
-                <span>UGX {group.subtotal.toLocaleString()}</span>
+
+              {/* Farmer subtotal */}
+              <div className="flex justify-between text-sm text-gray-500
+                              pt-2 mt-1">
+                <span>Subtotal</span>
+                <span className="font-medium">
+                  UGX {group.subtotal.toLocaleString()}
+                </span>
               </div>
             </div>
           ))}
 
           {/* Grand Total */}
-          <div className="border-t border-gray-200 mt-4 pt-4 flex justify-between
-                          text-lg font-bold text-farm-dark">
-            <span>Grand Total</span>
-            <span className="text-primary-600">
-              UGX {Number(totalAmount).toLocaleString()}
+          <div className="border-t-2 border-gray-200 mt-4 pt-4
+                          flex justify-between">
+            <span className="font-bold text-farm-dark text-lg">Grand Total</span>
+            <span className="font-bold text-primary-600 text-xl">
+              UGX {Number(total).toLocaleString()}
             </span>
           </div>
         </div>
@@ -184,13 +240,9 @@ export default function CheckoutPage() {
               value={address}
               onChange={e => setAddress(e.target.value)}
               className="input h-24 resize-none"
-              placeholder="Enter your full delivery address e.g. Plot 23, Kampala Road, Wakiso"
+              placeholder="Enter your full delivery address
+e.g. Plot 23, Kampala Road, Wakiso District"
             />
-            {savedAddress && (
-              <p className="text-xs text-gray-400">
-                Using your saved address. You can change it above.
-              </p>
-            )}
           </div>
 
           <div className="space-y-1">
@@ -199,17 +251,24 @@ export default function CheckoutPage() {
               value={notes}
               onChange={e => setNotes(e.target.value)}
               className="input h-16 resize-none"
-              placeholder="Any special instructions for the farmer e.g. Call on arrival"
+              placeholder="Any special instructions e.g. Call on arrival, morning delivery preferred"
             />
           </div>
         </div>
 
         {/* Payment note */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-5">
-          <p className="text-sm text-yellow-800">
-            <strong>💳 Payment:</strong> Cash on delivery. Pay the farmer when you
-            receive your order. Payment gateway coming soon.
-          </p>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl
+                        p-4 mb-5 flex items-start gap-3">
+          <span className="text-2xl shrink-0">💵</span>
+          <div>
+            <p className="text-sm font-semibold text-yellow-800">
+              Cash on Delivery
+            </p>
+            <p className="text-xs text-yellow-700 mt-0.5">
+              Pay the farmer directly when you receive your order.
+              An order summary will be generated for both you and the farmer.
+            </p>
+          </div>
         </div>
 
         {/* Place Order */}
@@ -219,7 +278,9 @@ export default function CheckoutPage() {
           loading={loading}
           onClick={handlePlaceOrder}
         >
-          {loading ? 'Placing Order...' : `Place Order · UGX ${Number(totalAmount).toLocaleString()}`}
+          {loading
+            ? 'Placing Order...'
+            : `Place Order · UGX ${Number(total).toLocaleString()}`}
         </Button>
       </main>
     </div>

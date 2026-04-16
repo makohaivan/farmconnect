@@ -1,7 +1,12 @@
+/**
+ * FarmConnect — Farmer Orders Page
+ * View incoming orders, advance status, print/download order summaries.
+ */
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Button, Logo, Alert, Spinner } from '../../components/ui'
+import OrderSummary from '../../components/OrderSummary'
 import api from '../../api/axios'
 
 const STATUS_FLOW = ['pending', 'confirmed', 'packed', 'dispatched', 'delivered']
@@ -12,89 +17,132 @@ const STATUS_STYLES = {
   packed:     { badge: 'bg-purple-100 text-purple-800',  label: 'Packed',     icon: '📦' },
   dispatched: { badge: 'bg-orange-100 text-orange-800',  label: 'Dispatched', icon: '🚚' },
   delivered:  { badge: 'bg-green-100 text-green-800',    label: 'Delivered',  icon: '🎉' },
+  cancelled:  { badge: 'bg-red-100 text-red-800',        label: 'Cancelled',  icon: '❌' },
 }
 
-function StatusBadge({ status }) {
-  const s = STATUS_STYLES[status] || STATUS_STYLES.pending
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5
-                      rounded-full text-xs font-medium ${s.badge}`}>
-      {s.icon} {s.label}
-    </span>
-  )
+// ── Print helpers ─────────────────────────────────────────────────────────────
+const PRINT_STYLES = `
+  @media print {
+    body * { visibility: hidden !important; }
+    #order-summary-print, #order-summary-print * { visibility: visible !important; }
+    #order-summary-print {
+      position: fixed !important;
+      top: 0 !important; left: 0 !important;
+      width: 100% !important;
+      padding: 24px !important;
+      background: white !important;
+    }
+    .no-print { display: none !important; }
+  }
+`
+
+function injectPrintStyles() {
+  if (!document.getElementById('farmconnect-print-styles')) {
+    const style = document.createElement('style')
+    style.id = 'farmconnect-print-styles'
+    style.innerHTML = PRINT_STYLES
+    document.head.appendChild(style)
+  }
 }
 
+// ── Order Card ────────────────────────────────────────────────────────────────
 function OrderCard({ order, onStatusUpdate }) {
-  const [loading,  setLoading]  = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const [advancing,  setAdvancing]  = useState(false)
+  const [expanded,   setExpanded]   = useState(false)
+  const [showPrint,  setShowPrint]  = useState(false)
 
   const currentIndex = STATUS_FLOW.indexOf(order.status)
   const nextStatus   = STATUS_FLOW[currentIndex + 1]
   const nextLabel    = nextStatus ? STATUS_STYLES[nextStatus]?.label : null
+  const s            = STATUS_STYLES[order.status] || STATUS_STYLES.pending
 
   const handleAdvance = async () => {
     if (!nextStatus) return
-    setLoading(true)
+    setAdvancing(true)
     try {
       await api.patch(`/orders/${order.id}/status/`, { status: nextStatus })
       onStatusUpdate(order.id, nextStatus)
     } catch {
       alert('Failed to update order status.')
     } finally {
-      setLoading(false)
+      setAdvancing(false)
     }
+  }
+
+  const handlePrint = () => {
+    injectPrintStyles()
+    setShowPrint(true)
+    // Small delay so the summary renders before print dialog opens
+    setTimeout(() => {
+      window.print()
+    }, 200)
   }
 
   return (
     <div className="card overflow-hidden">
-      {/* Order Header */}
-      <div className="p-5 flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap mb-2">
-            <p className="font-semibold text-farm-dark text-sm">
-              Order #{order.id}
+      {/* Header */}
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <p className="font-semibold text-farm-dark">Order #{order.id}</p>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5
+                                rounded-full text-xs font-medium ${s.badge}`}>
+                {s.icon} {s.label}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500">
+              Buyer: <span className="font-medium text-gray-700">{order.buyer_name}</span>
             </p>
-            <StatusBadge status={order.status} />
-          </div>
-          <p className="text-xs text-gray-500">
-            Buyer: <span className="font-medium text-gray-700">{order.buyer_name}</span>
-          </p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Placed: {new Date(order.created_at).toLocaleDateString('en-UG', {
-              day: 'numeric', month: 'short', year: 'numeric',
-              hour: '2-digit', minute: '2-digit'
-            })}
-          </p>
-          {order.delivery_address && (
             <p className="text-xs text-gray-500 mt-0.5">
-              📍 {order.delivery_address}
+              {new Date(order.created_at).toLocaleDateString('en-UG', {
+                day: 'numeric', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+              })}
             </p>
-          )}
+            {order.delivery_address && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                📍 {order.delivery_address}
+              </p>
+            )}
+          </div>
+          <div className="text-right shrink-0">
+            <p className="font-bold text-primary-600 text-lg">
+              UGX {Number(order.total_amount).toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-400">{order.items?.length || 0} item(s)</p>
+          </div>
         </div>
 
-        <div className="text-right shrink-0">
-          <p className="font-bold text-primary-600 text-lg">
-            UGX {Number(order.total_amount).toLocaleString()}
-          </p>
-          <p className="text-xs text-gray-400">{order.items?.length || 0} item(s)</p>
-        </div>
+        {/* Progress dots */}
+        {order.status !== 'cancelled' && (
+          <div className="flex items-center gap-1 mt-3">
+            {STATUS_FLOW.map((st, i) => (
+              <div key={st} className="flex items-center gap-1 flex-1">
+                <div className={`h-2 rounded-full w-full transition-colors ${
+                  i <= currentIndex ? 'bg-primary-600' : 'bg-gray-200'
+                }`} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Order Items (expandable) */}
+      {/* Items toggle */}
       <div className="border-t border-gray-100">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full px-5 py-2.5 text-left text-xs text-primary-600
-                     hover:bg-gray-50 font-medium flex items-center justify-between"
+          className="w-full px-5 py-2.5 text-xs text-primary-600
+                     hover:bg-gray-50 font-medium flex justify-between text-left"
         >
           <span>{expanded ? 'Hide items' : 'View items'}</span>
           <span>{expanded ? '▲' : '▼'}</span>
         </button>
 
         {expanded && (
-          <div className="px-5 pb-4 space-y-2">
+          <div className="px-5 pb-3 space-y-2">
             {order.items?.map((item, i) => (
-              <div key={i} className="flex items-center justify-between
+              <div key={i} className="flex justify-between items-center
                                       text-sm py-2 border-b border-gray-50 last:border-0">
                 <div>
                   <p className="font-medium text-gray-800">{item.product_name}</p>
@@ -111,56 +159,57 @@ function OrderCard({ order, onStatusUpdate }) {
         )}
       </div>
 
-      {/* Action Footer */}
-      {order.status !== 'delivered' && (
-        <div className="px-5 pb-4 pt-2 flex items-center justify-between border-t border-gray-100">
-          {/* Progress dots */}
-          <div className="flex items-center gap-1">
-            {STATUS_FLOW.map((s, i) => (
-              <div key={s} className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-full transition-colors ${
-                  i <= currentIndex ? 'bg-primary-600' : 'bg-gray-200'
-                }`} />
-                {i < STATUS_FLOW.length - 1 && (
-                  <div className={`w-3 h-0.5 ${
-                    i < currentIndex ? 'bg-primary-600' : 'bg-gray-200'
-                  }`} />
-                )}
-              </div>
-            ))}
-          </div>
-
-          {nextStatus && (
-            <Button
-              size="sm"
-              loading={loading}
-              onClick={handleAdvance}
-              className="text-xs"
-            >
-              {loading ? 'Updating...' : `Mark ${nextLabel} →`}
+      {/* Actions Footer */}
+      <div className="px-5 pb-4 pt-3 border-t border-gray-100
+                      flex items-center justify-between flex-wrap gap-3">
+        {/* Status advance */}
+        <div className="flex items-center gap-2">
+          {nextStatus && order.status !== 'cancelled' && (
+            <Button size="sm" loading={advancing} onClick={handleAdvance}>
+              {advancing ? 'Updating...' : `Mark ${nextLabel} →`}
             </Button>
           )}
+          {order.status === 'delivered' && (
+            <span className="text-xs text-green-600 font-medium">
+              🎉 Order completed
+            </span>
+          )}
+          {order.status === 'cancelled' && (
+            <span className="text-xs text-red-500 font-medium">
+              ❌ Order cancelled by buyer
+            </span>
+          )}
         </div>
-      )}
 
-      {order.status === 'delivered' && (
-        <div className="px-5 pb-4 pt-2 border-t border-gray-100">
-          <p className="text-xs text-green-600 font-medium text-center">
-            🎉 Order completed successfully
-          </p>
+        {/* Print button */}
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg
+                     bg-farm-dark text-white hover:bg-blue-900 transition-colors
+                     font-medium"
+        >
+          🖨️ Print / Save Summary
+        </button>
+      </div>
+
+      {/* Hidden print summary — renders when showPrint is true */}
+      {showPrint && (
+        <div style={{ display: 'none' }}>
+          <OrderSummary order={order} mode="farmer" />
         </div>
       )}
     </div>
   )
 }
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function OrdersManage() {
   const { user, logout } = useAuth()
 
-  const [orders,      setOrders]      = useState([])
-  const [loading,     setLoading]     = useState(true)
-  const [error,       setError]       = useState('')
-  const [statusFilter,setStatusFilter]= useState('')
+  const [orders,       setOrders]       = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   useEffect(() => {
     api.get('/orders/farmer/')
@@ -179,7 +228,6 @@ export default function OrdersManage() {
     ? orders.filter(o => o.status === statusFilter)
     : orders
 
-  // Count by status
   const counts = STATUS_FLOW.reduce((acc, s) => {
     acc[s] = orders.filter(o => o.status === s).length
     return acc
@@ -189,7 +237,7 @@ export default function OrdersManage() {
     <div className="min-h-screen bg-gray-50">
       {/* Nav */}
       <header className="bg-white border-b border-gray-200 px-6 py-4
-                         flex items-center justify-between">
+                         flex items-center justify-between no-print">
         <Logo />
         <div className="flex items-center gap-3">
           <Link to="/farmer/dashboard"
@@ -204,8 +252,7 @@ export default function OrdersManage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8 fade-in">
-        {/* Page header */}
+      <main className="max-w-4xl mx-auto px-6 py-8 fade-in no-print">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-farm-dark">Orders</h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -242,7 +289,7 @@ export default function OrdersManage() {
           ))}
         </div>
 
-        {/* Content */}
+        {/* Orders */}
         {loading ? (
           <div className="flex justify-center py-20">
             <Spinner size="lg" color="green" />
@@ -255,7 +302,7 @@ export default function OrdersManage() {
             </h2>
             <p className="text-gray-500 text-sm mt-2">
               {statusFilter
-                ? 'Try a different filter above.'
+                ? 'Try a different filter.'
                 : 'Orders from buyers will appear here once they purchase your products.'}
             </p>
           </div>

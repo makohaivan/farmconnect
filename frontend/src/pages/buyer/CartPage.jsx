@@ -1,11 +1,9 @@
 /**
  * FarmConnect — Cart Page
- * Review cart items, adjust quantities, proceed to checkout.
  */
-import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useCartStore } from '../../store/cartStore'
-import { useAuth }      from '../../hooks/useAuth'
+import { useCartStore, cartTotal, cartItemCount } from '../../store/cartStore'
+import { useAuth }  from '../../hooks/useAuth'
 import { Button, Logo } from '../../components/ui'
 
 function CartItem({ item, onUpdate, onRemove }) {
@@ -29,7 +27,8 @@ function CartItem({ item, onUpdate, onRemove }) {
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-farm-dark text-sm">{product.name}</p>
         <p className="text-xs text-gray-400 mt-0.5">
-          {product.farm_name || product.farmer_name} · {product.location}
+          🌾 {product.farm_name || product.farmer_name}
+          {product.location && ` · 📍 ${product.location}`}
         </p>
         <p className="text-sm font-bold text-primary-600 mt-1">
           UGX {Number(product.price).toLocaleString()} / {product.unit}
@@ -41,8 +40,7 @@ function CartItem({ item, onUpdate, onRemove }) {
         <button
           onClick={() => onUpdate(product.id, quantity - 1)}
           className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200
-                     flex items-center justify-center font-bold text-gray-600
-                     transition-colors"
+                     flex items-center justify-center font-bold text-gray-600"
         >
           −
         </button>
@@ -52,20 +50,20 @@ function CartItem({ item, onUpdate, onRemove }) {
           disabled={quantity >= product.quantity}
           className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200
                      flex items-center justify-center font-bold text-gray-600
-                     transition-colors disabled:opacity-40"
+                     disabled:opacity-40"
         >
           +
         </button>
       </div>
 
-      {/* Subtotal */}
+      {/* Subtotal + remove */}
       <div className="text-right shrink-0">
         <p className="font-bold text-farm-dark text-sm">
           UGX {(Number(product.price) * quantity).toLocaleString()}
         </p>
         <button
           onClick={() => onRemove(product.id)}
-          className="text-xs text-red-400 hover:text-red-600 mt-1 transition-colors"
+          className="text-xs text-red-400 hover:text-red-600 mt-1"
         >
           Remove
         </button>
@@ -75,17 +73,15 @@ function CartItem({ item, onUpdate, onRemove }) {
 }
 
 export default function CartPage() {
-  const { user, logout }               = useAuth()
+  const { logout }                        = useAuth()
   const { items, updateQuantity,
-          removeItem, clearCart,
-          totalAmount }                = useCartStore()
-  const navigate                       = useNavigate()
-
-  const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
+          removeItem, clearCart }         = useCartStore()
+  const total      = useCartStore(cartTotal)
+  const totalItems = useCartStore(cartItemCount)
+  const navigate   = useNavigate()
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4
                          flex items-center justify-between">
         <Logo />
@@ -115,13 +111,10 @@ export default function CartPage() {
             <p className="text-gray-500 text-sm mt-2 mb-6">
               Browse fresh produce from local farmers and add items to your cart.
             </p>
-            <Link to="/buyer/products">
-              <Button>Browse Products</Button>
-            </Link>
+            <Link to="/buyer/products"><Button>Browse Products</Button></Link>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Cart Items */}
             {items.map(item => (
               <CartItem
                 key={item.product.id}
@@ -131,16 +124,14 @@ export default function CartPage() {
               />
             ))}
 
-            {/* Order Summary */}
-            <div className="card p-5 mt-4">
-              <h3 className="font-semibold text-farm-dark mb-4">Order Summary</h3>
-              <div className="space-y-2 mb-4">
+            {/* Summary */}
+            <div className="card p-5">
+              <h3 className="font-semibold text-farm-dark mb-3">Order Summary</h3>
+              <div className="space-y-2 mb-3">
                 {items.map(item => (
                   <div key={item.product.id}
                     className="flex justify-between text-sm text-gray-600">
-                    <span>
-                      {item.product.name} × {item.quantity}
-                    </span>
+                    <span>{item.product.name} × {item.quantity}</span>
                     <span>
                       UGX {(Number(item.product.price) * item.quantity).toLocaleString()}
                     </span>
@@ -151,24 +142,18 @@ export default function CartPage() {
                               font-bold text-farm-dark text-lg">
                 <span>Total</span>
                 <span className="text-primary-600">
-                  UGX {Number(totalAmount).toLocaleString()}
+                  UGX {Number(total).toLocaleString()}
                 </span>
               </div>
             </div>
 
             {/* Actions */}
             <div className="flex gap-3">
-              <button
-                onClick={clearCart}
-                className="btn btn-secondary text-sm"
-              >
+              <button onClick={clearCart} className="btn btn-secondary text-sm">
                 🗑 Clear Cart
               </button>
-              <Button
-                fullWidth
-                size="lg"
-                onClick={() => navigate('/buyer/checkout')}
-              >
+              <Button fullWidth size="lg"
+                onClick={() => navigate('/buyer/checkout')}>
                 Proceed to Checkout →
               </Button>
             </div>

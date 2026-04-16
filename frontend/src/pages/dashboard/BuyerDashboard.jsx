@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth }      from '../../hooks/useAuth'
-import { useCartStore } from '../../store/cartStore'
+import { useCartStore, cartItemCount } from '../../store/cartStore'
 import { Button, Logo, Spinner } from '../../components/ui'
 import { getBuyerOrders } from '../../api/ordersApi'
 
 export default function BuyerDashboard() {
   const { user, logout } = useAuth()
-  const totalCartItems   = useCartStore(s => s.items.reduce((sum,i) => sum + i.quantity, 0))
+  const totalCartItems = useCartStore(cartItemCount)
 
   const [stats,   setStats]   = useState(null)
   const [loading, setLoading] = useState(true)
