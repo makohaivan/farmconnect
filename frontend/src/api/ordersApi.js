@@ -19,3 +19,13 @@ export const cancelOrder = async (id) => {
   const res = await api.post(`/orders/${id}/cancel/`)
   return res.data
 }
+
+export const postReview = async (data) => {
+  const res = await api.post('/orders/review/', data)
+  return res.data
+}
+
+export const getProductReviews = async (productId) => {
+  const res = await api.get(`/orders/reviews/${productId}/`)
+  return res.data
+}

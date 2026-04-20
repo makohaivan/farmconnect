@@ -4,6 +4,7 @@ import { useAuth }      from '../../hooks/useAuth'
 import { useCartStore, cartItemCount } from '../../store/cartStore'
 import { Button, Logo, Spinner } from '../../components/ui'
 import { getBuyerOrders } from '../../api/ordersApi'
+import ChatWidget from '../../components/ChatWidget'
 
 export default function BuyerDashboard() {
   const { user, logout } = useAuth()
@@ -60,6 +61,11 @@ export default function BuyerDashboard() {
                           justify-center text-blue-700 font-bold text-sm">
             {user?.first_name?.[0]}{user?.last_name?.[0]}
           </div>
+          <Link to="/profile/edit"
+            className="text-xs px-3 py-2 rounded-lg bg-gray-100
+                       text-gray-600 hover:bg-gray-200 font-medium">
+            ✏️ Profile
+          </Link>
           <Button variant="secondary" size="sm" onClick={logout}>Sign out</Button>
         </div>
       </header>

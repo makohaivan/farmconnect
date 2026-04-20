@@ -35,6 +35,7 @@ LOCAL_APPS = [
     'apps.accounts',
     'apps.products',
     'apps.orders',
+    'apps.ai',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -164,3 +165,6 @@ REFRESH_TOKEN_COOKIE_NAME     = 'farmconnect_refresh'
 REFRESH_TOKEN_COOKIE_HTTPONLY = True
 REFRESH_TOKEN_COOKIE_SECURE   = False  # Set True in production (requires HTTPS)
 REFRESH_TOKEN_COOKIE_SAMESITE = 'Lax'
+
+# ── AI Configuration ──────────────────────────────────────────────────────────
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')

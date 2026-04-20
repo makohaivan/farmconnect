@@ -1,7 +1,7 @@
 import traceback
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -213,3 +213,126 @@ def cancel_order(request, order_id):
         order.save()
 
     return Response({'message': 'Order cancelled successfully.'})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REVIEWS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def post_review(request):
+    """
+    POST /api/v1/orders/review/
+    Buyer posts a review for a product after the order is delivered.
+    Body: { order_id, product_id, rating (1-5), comment }
+    """
+    if request.user.role != User.ROLE_BUYER:
+        return Response({'error': 'Only buyers can post reviews.'}, status=403)
+
+    order_id   = request.data.get('order_id')
+    product_id = request.data.get('product_id')
+    rating     = request.data.get('rating')
+    comment    = request.data.get('comment', '')
+
+    # Validate
+    if not all([order_id, product_id, rating]):
+        return Response({'error': 'order_id, product_id and rating are required.'}, status=400)
+
+    try:
+        rating = int(rating)
+        if rating < 1 or rating > 5:
+            raise ValueError
+    except (ValueError, TypeError):
+        return Response({'error': 'Rating must be a number between 1 and 5.'}, status=400)
+
+    # Order must exist, belong to this buyer, and be delivered
+    order = get_object_or_404(Order, id=order_id, buyer=request.user)
+    if order.status != 'delivered':
+        return Response(
+            {'error': 'You can only review products from delivered orders.'},
+            status=400
+        )
+
+    # Product must be in the order
+    if not order.items.filter(product_id=product_id).exists():
+        return Response(
+            {'error': 'This product is not in the specified order.'},
+            status=400
+        )
+
+    from apps.products.models import Product
+    product = get_object_or_404(Product, id=product_id)
+
+    from .models import Review
+    review, created = Review.objects.get_or_create(
+        buyer=request.user, product=product, order=order,
+        defaults={'rating': rating, 'comment': comment}
+    )
+
+    if not created:
+        # Update existing review
+        review.rating  = rating
+        review.comment = comment
+        review.save()
+
+    return Response({
+        'message':    'Review saved successfully.',
+        'id':         review.id,
+        'rating':     review.rating,
+        'comment':    review.comment,
+        'created_at': review.created_at,
+    }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def product_reviews(request, product_id):
+    """GET /api/v1/orders/reviews/<product_id>/ — All reviews for a product."""
+    from .models import Review
+    from apps.products.models import Product
+
+    product = get_object_or_404(Product, id=product_id)
+    reviews = Review.objects.filter(product=product).select_related('buyer')
+
+    data = [{
+        'id':          r.id,
+        'buyer_name':  r.buyer.get_full_name(),
+        'rating':      r.rating,
+        'comment':     r.comment,
+        'created_at':  r.created_at,
+    } for r in reviews]
+
+    avg = sum(r['rating'] for r in data) / len(data) if data else 0
+
+    return Response({
+        'product_id':    product_id,
+        'average_rating': round(avg, 1),
+        'total_reviews':  len(data),
+        'reviews':        data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def all_orders(request):
+    """
+    GET /api/v1/orders/all/
+    Admin only — view all orders platform-wide.
+    """
+    from apps.accounts.models import User as UserModel
+    if request.user.role != UserModel.ROLE_ADMIN:
+        return Response({'error': 'Admin access required.'}, status=403)
+
+    orders = Order.objects.all().select_related(
+        'buyer', 'farmer', 'farmer__farmerprofile'
+    ).prefetch_related('items').order_by('-created_at')
+
+    status_filter = request.query_params.get('status')
+    if status_filter:
+        orders = orders.filter(status=status_filter)
+
+    return Response({
+        'count':   orders.count(),
+        'results': OrderSerializer(orders, many=True).data,
+    })

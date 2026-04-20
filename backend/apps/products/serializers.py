@@ -1,7 +1,5 @@
-"""
-FarmConnect - Product Serializers
-"""
 from rest_framework import serializers
+from django.db.models import Avg, Count
 from .models import Product, Category
 from apps.accounts.models import User
 
@@ -37,11 +35,12 @@ class FarmerMiniSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    """Full product serializer — used for detail views and farmer's own listings."""
     farmer        = FarmerMiniSerializer(read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
     category_icon = serializers.CharField(source='category.icon', read_only=True)
     image_url     = serializers.SerializerMethodField()
+    avg_rating    = serializers.SerializerMethodField()
+    review_count  = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
@@ -50,8 +49,11 @@ class ProductSerializer(serializers.ModelSerializer):
             'image', 'image_url', 'is_available', 'is_featured',
             'views_count', 'created_at', 'updated_at',
             'farmer', 'category', 'category_name', 'category_icon',
+            'avg_rating', 'review_count',
         ]
-        read_only_fields = ['id', 'farmer', 'views_count', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'farmer', 'views_count', 'created_at', 'updated_at'
+        ]
 
     def get_image_url(self, obj):
         request = self.context.get('request')
@@ -59,9 +61,16 @@ class ProductSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url)
         return None
 
+    def get_avg_rating(self, obj):
+        result = obj.reviews.aggregate(avg=Avg('rating'))
+        avg = result['avg']
+        return round(avg, 1) if avg else 0
+
+    def get_review_count(self, obj):
+        return obj.reviews.count()
+
 
 class ProductCreateSerializer(serializers.ModelSerializer):
-    """Used when a farmer creates or updates a product."""
     class Meta:
         model  = Product
         fields = [
@@ -86,13 +95,15 @@ class ProductCreateSerializer(serializers.ModelSerializer):
 
 
 class ProductListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for product catalog listing."""
-    farmer_name = serializers.SerializerMethodField()
-    farm_name   = serializers.SerializerMethodField()
-    location    = serializers.SerializerMethodField()
+    """Lightweight serializer for the buyer product catalog."""
+    farmer_name  = serializers.SerializerMethodField()
+    farm_name    = serializers.SerializerMethodField()
+    location     = serializers.SerializerMethodField()
     category_name= serializers.CharField(source='category.name', read_only=True)
     category_icon= serializers.CharField(source='category.icon', read_only=True)
-    image_url   = serializers.SerializerMethodField()
+    image_url    = serializers.SerializerMethodField()
+    avg_rating   = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
@@ -101,14 +112,10 @@ class ProductListSerializer(serializers.ModelSerializer):
             'image_url', 'is_available', 'is_featured',
             'farmer_name', 'farm_name', 'location',
             'category_name', 'category_icon', 'created_at',
+            'avg_rating', 'review_count',
         ]
 
-    def get_farmer_name(self, obj): return obj.farmer.get_full_name()
-    def get_image_url(self, obj):
-        request = self.context.get('request')
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
-        return None
+    def get_farmer_name(self, obj):  return obj.farmer.get_full_name()
     def get_farm_name(self, obj):
         if hasattr(obj.farmer, 'farmerprofile'):
             return obj.farmer.farmerprofile.farm_name
@@ -117,3 +124,14 @@ class ProductListSerializer(serializers.ModelSerializer):
         if hasattr(obj.farmer, 'farmerprofile'):
             return obj.farmer.farmerprofile.location
         return ''
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        return None
+    def get_avg_rating(self, obj):
+        result = obj.reviews.aggregate(avg=Avg('rating'))
+        avg = result['avg']
+        return round(avg, 1) if avg else 0
+    def get_review_count(self, obj):
+        return obj.reviews.count()

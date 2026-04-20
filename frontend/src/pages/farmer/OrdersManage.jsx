@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Button, Logo, Alert, Spinner } from '../../components/ui'
-import OrderSummary from '../../components/OrderSummary'
+import { printOrder } from '../../components/OrderSummary'
 import api from '../../api/axios'
 
 const STATUS_FLOW = ['pending', 'confirmed', 'packed', 'dispatched', 'delivered']
@@ -20,36 +20,11 @@ const STATUS_STYLES = {
   cancelled:  { badge: 'bg-red-100 text-red-800',        label: 'Cancelled',  icon: '❌' },
 }
 
-// ── Print helpers ─────────────────────────────────────────────────────────────
-const PRINT_STYLES = `
-  @media print {
-    body * { visibility: hidden !important; }
-    #order-summary-print, #order-summary-print * { visibility: visible !important; }
-    #order-summary-print {
-      position: fixed !important;
-      top: 0 !important; left: 0 !important;
-      width: 100% !important;
-      padding: 24px !important;
-      background: white !important;
-    }
-    .no-print { display: none !important; }
-  }
-`
-
-function injectPrintStyles() {
-  if (!document.getElementById('farmconnect-print-styles')) {
-    const style = document.createElement('style')
-    style.id = 'farmconnect-print-styles'
-    style.innerHTML = PRINT_STYLES
-    document.head.appendChild(style)
-  }
-}
 
 // ── Order Card ────────────────────────────────────────────────────────────────
 function OrderCard({ order, onStatusUpdate }) {
   const [advancing,  setAdvancing]  = useState(false)
   const [expanded,   setExpanded]   = useState(false)
-  const [showPrint,  setShowPrint]  = useState(false)
 
   const currentIndex = STATUS_FLOW.indexOf(order.status)
   const nextStatus   = STATUS_FLOW[currentIndex + 1]
@@ -69,14 +44,7 @@ function OrderCard({ order, onStatusUpdate }) {
     }
   }
 
-  const handlePrint = () => {
-    injectPrintStyles()
-    setShowPrint(true)
-    // Small delay so the summary renders before print dialog opens
-    setTimeout(() => {
-      window.print()
-    }, 200)
-  }
+  const handlePrint = () => printOrder(order, 'farmer')
 
   return (
     <div className="card overflow-hidden">
@@ -191,13 +159,6 @@ function OrderCard({ order, onStatusUpdate }) {
           🖨️ Print / Save Summary
         </button>
       </div>
-
-      {/* Hidden print summary — renders when showPrint is true */}
-      {showPrint && (
-        <div style={{ display: 'none' }}>
-          <OrderSummary order={order} mode="farmer" />
-        </div>
-      )}
     </div>
   )
 }
