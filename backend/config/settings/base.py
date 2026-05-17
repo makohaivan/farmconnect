@@ -25,6 +25,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    'channels',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -36,6 +37,7 @@ LOCAL_APPS = [
     'apps.products',
     'apps.orders',
     'apps.ai',
+    'apps.notifications',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -168,3 +170,22 @@ REFRESH_TOKEN_COOKIE_SAMESITE = 'Lax'
 
 # ── AI Configuration ──────────────────────────────────────────────────────────
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+
+
+# ── Django Channels ────────────────────────────────────────────────────────────
+# Using InMemoryChannelLayer for development.
+# In production, replace with Redis:
+#   pip install channels-redis
+#   CHANNEL_LAYERS = {
+#       "default": {
+#           "BACKEND": "channels_redis.core.RedisChannelLayer",
+#           "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
+#       }
+#   }
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
+
+ASGI_APPLICATION = "config.asgi.application"

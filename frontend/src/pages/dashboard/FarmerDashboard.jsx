@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../../hooks/useAuth'
-import { Button, Logo, Spinner } from '../../components/ui'
+import { Package, ClipboardList, Sparkles, TrendingUp,
+         CheckCircle2, AlertTriangle, Plus } from 'lucide-react'
+import AppLayout    from '../../components/AppLayout'
+import { StatCard, Button, Spinner } from '../../components/ui'
 import { getMyListings } from '../../api/productsApi'
-import ChatWidget from '../../components/ChatWidget'
+import { useAuth } from '../../hooks/useAuth'
 
 export default function FarmerDashboard() {
-  const { user, logout } = useAuth()
-  const [stats,   setStats]   = useState(null)
+  const { user }          = useAuth()
+  const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     getMyListings()
       .then(data => {
-        const products  = data.results || []
+        const products = data.results || []
         setStats({
           total:      products.length,
           available:  products.filter(p => p.is_available).length,
@@ -24,115 +26,95 @@ export default function FarmerDashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  const quickLinks = [
-    { to: '/farmer/products',  icon: '📦', label: 'My Products', desc: 'Add, edit and manage your listings',     badge: stats?.total ?? null },
-    { to: '/farmer/orders',    icon: '📋', label: 'Orders',      desc: 'View and fulfil incoming orders',        badge: null },
-    { to: '/farmer/insights',  icon: '✨', label: 'AI Insights', desc: 'AI-powered sales analysis and tips',     badge: null, highlight: true },
-  ]
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4
-                         flex items-center justify-between">
-        <Logo />
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-sm font-medium text-gray-800">
-              {user?.first_name} {user?.last_name}
-            </p>
-            <p className="text-xs text-gray-500">
-              {user?.farmerprofile?.farm_name || 'Farmer'}
-            </p>
-          </div>
-          <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center
-                          justify-center text-primary-700 font-bold text-sm">
-            {user?.first_name?.[0]}{user?.last_name?.[0]}
-          </div>
-          <Link to="/profile/edit"
-            className="text-xs px-3 py-2 rounded-lg bg-gray-100
-                       text-gray-600 hover:bg-gray-200 font-medium">
-            ✏️ Profile
+    <AppLayout
+      title={`Welcome back, ${user?.first_name}! 👋`}
+      subtitle={user?.farmerprofile?.farm_name
+        ? `${user.farmerprofile.farm_name} · ${user.farmerprofile.location || ''}`
+        : 'Manage your farm from here'}
+    >
+      {/* Stats */}
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Spinner size="lg" className="text-primary-600" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <StatCard label="Total Products"   value={stats?.total}
+            icon={Package}       color="text-blue-600"    bg="bg-blue-50" />
+          <StatCard label="Available"        value={stats?.available}
+            icon={CheckCircle2}  color="text-emerald-600" bg="bg-emerald-50" />
+          <StatCard label="Out of Stock"     value={stats?.outOfStock}
+            icon={AlertTriangle} color="text-amber-600"   bg="bg-amber-50" />
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      <h2 className="text-sm font-semibold text-gray-500 uppercase
+                     tracking-wider mb-4">
+        Quick Actions
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[
+          { to: '/farmer/products',  icon: Package,        label: 'My Products',
+            desc: 'Add, edit and manage listings', color: 'bg-blue-50 text-blue-600',
+            badge: stats?.total, action: 'Manage' },
+          { to: '/farmer/orders',    icon: ClipboardList,  label: 'Orders',
+            desc: 'View and fulfil incoming orders', color: 'bg-purple-50 text-purple-600',
+            action: 'View Orders' },
+          { to: '/farmer/insights',  icon: Sparkles,       label: 'AI Insights',
+            desc: 'AI-powered sales analysis', color: 'bg-amber-50 text-amber-600',
+            action: 'View Insights', ai: true },
+        ].map(item => (
+          <Link key={item.to} to={item.to}
+            className="card-hover p-5 group flex flex-col gap-4">
+            <div className="flex items-start justify-between">
+              <div className={`w-11 h-11 rounded-xl ${item.color}
+                               flex items-center justify-center`}>
+                <item.icon className="w-5 h-5" />
+              </div>
+              {item.ai && (
+                <span className="badge badge-yellow text-xs">AI</span>
+              )}
+              {item.badge > 0 && !item.ai && (
+                <span className="badge badge-green">{item.badge}</span>
+              )}
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 group-hover:text-primary-600
+                             transition-colors">
+                {item.label}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+            </div>
+            <div className="flex items-center text-xs font-medium text-primary-600
+                             group-hover:gap-2 transition-all">
+              {item.action}
+              <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span>
+            </div>
           </Link>
-          <Button variant="secondary" size="sm" onClick={logout}>Sign out</Button>
-        </div>
-      </header>
+        ))}
+      </div>
 
-      <main className="max-w-5xl mx-auto px-6 py-10 fade-in">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-farm-dark">
-            Welcome, {user?.first_name}! 👋
-          </h1>
-          <p className="text-gray-500 mt-1">
-            {user?.farmerprofile?.farm_name
-              ? `${user.farmerprofile.farm_name} · ${user.farmerprofile.location || ''}`
-              : 'Manage your farm and products from here.'}
+      {/* Add product CTA if no products */}
+      {!loading && stats?.total === 0 && (
+        <div className="mt-6 card p-8 text-center border-2 border-dashed
+                        border-gray-200">
+          <div className="w-14 h-14 bg-primary-50 rounded-2xl flex items-center
+                          justify-center mx-auto mb-4">
+            <Package className="w-7 h-7 text-primary-600" />
+          </div>
+          <h3 className="font-semibold text-gray-900 mb-1">
+            No products yet
+          </h3>
+          <p className="text-sm text-gray-500 mb-5">
+            Add your first listing and start selling to buyers directly.
           </p>
+          <Link to="/farmer/products">
+            <Button icon={Plus}>Add Your First Product</Button>
+          </Link>
         </div>
-
-        {/* Stats */}
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <Spinner size="lg" color="green" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
-            {[
-              { label: 'Total Products',   value: stats?.total,      icon: '📦', color: 'bg-blue-50 text-blue-700' },
-              { label: 'Available',        value: stats?.available,  icon: '✅', color: 'bg-green-50 text-green-700' },
-              { label: 'Out of Stock',     value: stats?.outOfStock, icon: '⚠️', color: 'bg-red-50 text-red-700' },
-            ].map(s => (
-              <div key={s.label} className="card p-5">
-                <div className={`w-10 h-10 rounded-lg ${s.color}
-                                 flex items-center justify-center text-xl mb-3`}>
-                  {s.icon}
-                </div>
-                <p className="text-3xl font-bold text-farm-dark">{s.value ?? 0}</p>
-                <p className="text-sm text-gray-500 mt-0.5">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <h2 className="font-semibold text-farm-dark mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {quickLinks.map(link => (
-            <Link key={link.to} to={link.to}
-              className={`card p-5 flex items-center gap-4
-                          hover:shadow-md transition-shadow group
-                          ${link.highlight ? 'border-purple-200 bg-purple-50/30' : ''}`}>
-              <div className="text-3xl shrink-0">{link.icon}</div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className={`font-semibold text-sm
-                                 group-hover:text-primary-600 transition-colors
-                                 ${link.highlight ? 'text-purple-700' : 'text-farm-dark'}`}>
-                    {link.label}
-                  </p>
-                  {link.badge !== null && link.badge > 0 && (
-                    <span className="badge badge-green">{link.badge}</span>
-                  )}
-                  {link.highlight && (
-                    <span className="text-xs bg-purple-100 text-purple-600
-                                     px-1.5 py-0.5 rounded-full font-medium">
-                      AI
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5">{link.desc}</p>
-              </div>
-              <span className={`text-xl transition-colors
-                               ${link.highlight
-                                 ? 'text-purple-300 group-hover:text-purple-500'
-                                 : 'text-gray-300 group-hover:text-primary-400'}`}>
-                →
-              </span>
-            </Link>
-          ))}
-        </div>
-      </main>
-
-      {/* AI Chat Widget — visible on all farmer pages */}
-      <ChatWidget />
-    </div>
+      )}
+    </AppLayout>
   )
 }

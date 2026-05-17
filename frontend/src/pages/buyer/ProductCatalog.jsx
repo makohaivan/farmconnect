@@ -1,155 +1,88 @@
-/**
- * FarmConnect — Product Catalog
- * Browse, search, filter, add to cart. Shows star ratings on cards.
- */
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth }      from '../../hooks/useAuth'
+import { Search, SlidersHorizontal, ShoppingCart, X } from 'lucide-react'
+import AppLayout from '../../components/AppLayout'
 import { useCartStore, cartItemCount } from '../../store/cartStore'
 import { getProducts, getCategories } from '../../api/productsApi'
-import { Button, Logo, Spinner, Alert } from '../../components/ui'
-import ChatWidget from '../../components/ChatWidget'
+import { Button, Spinner, Alert, EmptyState } from '../../components/ui'
 
-// ── Star display ──────────────────────────────────────────────────────────────
 function Stars({ rating, count }) {
   if (!rating) return null
   return (
     <div className="flex items-center gap-1">
       <div className="flex">
         {[1,2,3,4,5].map(s => (
-          <span key={s}
-            className={`text-sm ${s <= Math.round(rating) ? 'text-yellow-400' : 'text-gray-200'}`}>
-            ★
-          </span>
+          <span key={s} className={`text-sm ${s <= Math.round(rating) ? 'text-yellow-400' : 'text-gray-200'}`}>★</span>
         ))}
       </div>
-      <span className="text-xs text-gray-400">
-        ({count || 0})
-      </span>
+      <span className="text-xs text-gray-400">({count})</span>
     </div>
   )
 }
 
-// ── Cart Badge ────────────────────────────────────────────────────────────────
-function CartBadge() {
-  const totalItems = useCartStore(cartItemCount)
-  return (
-    <Link to="/buyer/cart"
-      className="relative flex items-center gap-2 px-3 py-2 rounded-lg
-                 bg-primary-50 hover:bg-primary-100 transition-colors">
-      <span className="text-xl">🛒</span>
-      <span className="text-sm font-medium text-primary-700">Cart</span>
-      {totalItems > 0 && (
-        <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary-600
-                         text-white text-xs rounded-full flex items-center
-                         justify-center font-bold">
-          {totalItems > 9 ? '9+' : totalItems}
-        </span>
-      )}
-    </Link>
-  )
-}
-
-// ── Product Card ──────────────────────────────────────────────────────────────
-function ProductCard({ product, onAddToCart }) {
+function ProductCard({ product, onAdd }) {
   const [added, setAdded] = useState(false)
-
-  const handleAdd = () => {
-    onAddToCart(product)
-    setAdded(true)
-    setTimeout(() => setAdded(false), 1500)
-  }
+  const handleAdd = () => { onAdd(product); setAdded(true); setTimeout(() => setAdded(false), 1500) }
 
   return (
-    <div className="card overflow-hidden hover:shadow-md transition-all
-                    duration-200 flex flex-col">
-      {/* Image */}
+    <div className="card-hover overflow-hidden flex flex-col group">
       <div className="h-44 bg-gray-100 relative overflow-hidden">
         {product.image_url ? (
           <img src={product.image_url} alt={product.name}
-            className="w-full h-full object-cover hover:scale-105
-                       transition-transform duration-300" />
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center
-                          text-5xl text-gray-200">
-            {product.category_icon || '🌾'}
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+            <span className="text-5xl opacity-30">{product.category_icon || '🌾'}</span>
           </div>
         )}
-        <span className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm
-                         text-xs font-medium text-gray-700 px-2 py-0.5 rounded-full">
+        <span className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm text-xs
+                         font-medium text-gray-700 px-2 py-0.5 rounded-full">
           {product.category_icon} {product.category_name}
         </span>
         {product.quantity <= 5 && product.quantity > 0 && (
-          <span className="absolute top-2 right-2 bg-orange-500 text-white
-                           text-xs font-bold px-2 py-0.5 rounded-full">
-            Only {product.quantity} left!
+          <span className="absolute top-2 right-2 bg-red-500 text-white text-xs
+                           font-bold px-2 py-0.5 rounded-full">
+            Only {product.quantity} left
           </span>
         )}
       </div>
 
-      {/* Details */}
       <div className="p-4 flex flex-col flex-1">
-        <h3 className="font-semibold text-farm-dark text-sm
-                       leading-tight mb-1">
-          {product.name}
-        </h3>
-        <p className="text-xs text-gray-400 mb-0.5">
-          🌾 {product.farm_name || product.farmer_name}
-        </p>
-        {product.location && (
-          <p className="text-xs text-gray-400 mb-1.5">
-            📍 {product.location}
-          </p>
-        )}
-
-        {/* Star rating */}
+        <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-0.5">{product.name}</h3>
+        <p className="text-xs text-gray-400 mb-0.5">🌾 {product.farm_name || product.farmer_name}</p>
+        {product.location && <p className="text-xs text-gray-400 mb-1.5">📍 {product.location}</p>}
         {product.avg_rating > 0 && (
           <div className="mb-2">
             <Stars rating={product.avg_rating} count={product.review_count} />
           </div>
         )}
-
-        <div className="mt-auto">
-          <div className="flex items-end justify-between mb-3">
-            <div>
-              <p className="text-xl font-bold text-primary-600">
-                UGX {Number(product.price).toLocaleString()}
-              </p>
-              <p className="text-xs text-gray-400">per {product.unit}</p>
-            </div>
-            <p className="text-xs text-gray-500">
-              {product.quantity} {product.unit} available
-            </p>
+        <div className="flex items-end justify-between mt-auto mb-3">
+          <div>
+            <p className="text-lg font-bold text-primary-600">UGX {Number(product.price).toLocaleString()}</p>
+            <p className="text-xs text-gray-400">per {product.unit}</p>
           </div>
-
-          <button
-            onClick={handleAdd}
-            className={`w-full py-2.5 rounded-lg text-sm font-medium
-                        transition-all duration-200 ${
-              added
-                ? 'bg-green-500 text-white'
-                : 'bg-primary-600 text-white hover:bg-primary-700 active:scale-95'
-            }`}
-          >
-            {added ? '✓ Added to Cart' : '+ Add to Cart'}
-          </button>
+          <p className="text-xs text-gray-500">{product.quantity} {product.unit}</p>
         </div>
+        <button onClick={handleAdd}
+          className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            added ? 'bg-emerald-500 text-white' : 'bg-primary-600 text-white hover:bg-primary-700 active:scale-95'
+          }`}>
+          {added ? '✓ Added' : '+ Add to Cart'}
+        </button>
       </div>
     </div>
   )
 }
 
-// ── Main Catalog Page ─────────────────────────────────────────────────────────
 export default function ProductCatalog() {
-  const { user, logout } = useAuth()
-  const { addItem }      = useCartStore()
+  const { addItem }    = useCartStore()
+  const cartCount      = useCartStore(cartItemCount)
 
   const [products,    setProducts]    = useState([])
   const [categories,  setCategories]  = useState([])
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState('')
   const [toast,       setToast]       = useState('')
-
   const [search,      setSearch]      = useState('')
   const [category,    setCategory]    = useState('')
   const [minPrice,    setMinPrice]    = useState('')
@@ -157,9 +90,7 @@ export default function ProductCatalog() {
   const [ordering,    setOrdering]    = useState('-created_at')
   const [showFilters, setShowFilters] = useState(false)
 
-  useEffect(() => {
-    getCategories().then(setCategories).catch(() => {})
-  }, [])
+  useEffect(() => { getCategories().then(setCategories).catch(() => {}) }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -168,204 +99,133 @@ export default function ProductCatalog() {
     if (category) params.category  = category
     if (minPrice) params.min_price = minPrice
     if (maxPrice) params.max_price = maxPrice
-
     getProducts(params)
       .then(data => setProducts(data.results || []))
       .catch(() => setError('Failed to load products.'))
       .finally(() => setLoading(false))
   }, [search, category, minPrice, maxPrice, ordering])
 
-  const handleAddToCart = (product) => {
+  const handleAdd = product => {
     addItem(product, 1)
     setToast(`${product.name} added to cart!`)
     setTimeout(() => setToast(''), 2500)
   }
 
-  const clearFilters = () => {
-    setSearch('')
-    setCategory('')
-    setMinPrice('')
-    setMaxPrice('')
-    setOrdering('-created_at')
-  }
-
+  const clearFilters = () => { setSearch(''); setCategory(''); setMinPrice(''); setMaxPrice(''); setOrdering('-created_at') }
   const hasFilters = search || category || minPrice || maxPrice
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AppLayout title="Browse Products" subtitle="Fresh produce from local farmers">
       {/* Toast */}
       {toast && (
-        <div className="fixed top-4 right-4 z-50 bg-green-600 text-white
-                        px-4 py-3 rounded-xl shadow-lg text-sm font-medium
-                        flex items-center gap-2 fade-in">
+        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-4 py-3
+                        rounded-2xl shadow-xl text-sm font-medium flex items-center
+                        gap-2 animate-fade-up">
           ✓ {toast}
         </div>
       )}
 
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center
-                        justify-between gap-4">
-          <Logo />
-          <div className="flex-1 max-w-md">
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search tomatoes, maize, milk..."
-              className="input text-sm"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <Link to="/buyer/dashboard"
-              className="text-sm text-gray-500 hover:text-primary-600 hidden sm:block">
-              Dashboard
-            </Link>
-            <Link to="/buyer/orders"
-              className="text-sm text-gray-500 hover:text-primary-600 hidden sm:block">
-              My Orders
-            </Link>
-            <CartBadge />
-            <Link to="/profile/edit"
-              className="text-sm text-gray-500 hover:text-primary-600 hidden sm:block">
-              {user?.first_name}
-            </Link>
-            <Button variant="secondary" size="sm" onClick={logout}>Sign out</Button>
-          </div>
+      {/* Search + filter bar */}
+      <div className="flex gap-3 mb-5 flex-wrap items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search tomatoes, maize, milk…"
+            className="input pl-10 text-sm" />
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {error && <div className="mb-4"><Alert type="error" message={error} /></div>}
+        <select value={ordering} onChange={e => setOrdering(e.target.value)}
+          className="input text-sm w-44">
+          <option value="-created_at">Newest First</option>
+          <option value="price">Price: Low → High</option>
+          <option value="-price">Price: High → Low</option>
+          <option value="name">Name A–Z</option>
+        </select>
 
-        {/* Category Pills */}
-        <div className="flex gap-2 flex-wrap mb-4 overflow-x-auto pb-1">
-          <button
-            onClick={() => setCategory('')}
-            className={`px-4 py-2 rounded-full text-sm font-medium
-                        transition-colors whitespace-nowrap ${
-              !category
-                ? 'bg-primary-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            All Products
+        <button onClick={() => setShowFilters(!showFilters)}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm
+                      font-semibold border transition-colors ${
+            showFilters ? 'bg-primary-50 border-primary-300 text-primary-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}>
+          <SlidersHorizontal className="w-4 h-4" /> Filters
+          {hasFilters && <span className="w-2 h-2 bg-primary-600 rounded-full" />}
+        </button>
+
+        {hasFilters && (
+          <button onClick={clearFilters}
+            className="flex items-center gap-1.5 text-sm text-red-500 hover:underline font-medium">
+            <X className="w-4 h-4" /> Clear
           </button>
-          {categories.map(c => (
-            <button
-              key={c.id}
-              onClick={() => setCategory(category == c.id ? '' : c.id)}
-              className={`px-4 py-2 rounded-full text-sm font-medium
-                          transition-colors whitespace-nowrap ${
-                category == c.id
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {c.icon} {c.name}
-              {c.product_count > 0 && (
-                <span className="ml-1 text-xs opacity-60">
-                  ({c.product_count})
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Filter bar */}
-        <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-gray-500">
-              {loading ? 'Loading...' : `${products.length} products`}
-              {hasFilters && ' (filtered)'}
-            </p>
-            {hasFilters && (
-              <button onClick={clearFilters}
-                className="text-xs text-red-500 hover:underline">
-                Clear filters
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={ordering}
-              onChange={e => setOrdering(e.target.value)}
-              className="input text-sm w-44"
-            >
-              <option value="-created_at">Newest First</option>
-              <option value="created_at">Oldest First</option>
-              <option value="price">Price: Low → High</option>
-              <option value="-price">Price: High → Low</option>
-              <option value="name">Name A–Z</option>
-            </select>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`btn btn-secondary text-sm ${
-                showFilters ? 'border-primary-400' : ''
-              }`}
-            >
-              🔧 Price
-            </button>
-          </div>
-        </div>
-
-        {/* Price filter */}
-        {showFilters && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4
-                          mb-5 flex items-center gap-4 flex-wrap fade-in">
-            <p className="text-sm font-medium text-gray-700">Price Range (UGX):</p>
-            <input type="number" placeholder="Min" value={minPrice}
-              onChange={e => setMinPrice(e.target.value)}
-              className="input text-sm w-32" />
-            <span className="text-gray-400">to</span>
-            <input type="number" placeholder="Max" value={maxPrice}
-              onChange={e => setMaxPrice(e.target.value)}
-              className="input text-sm w-32" />
-            <button onClick={() => { setMinPrice(''); setMaxPrice('') }}
-              className="text-xs text-red-500 hover:underline">
-              Clear
-            </button>
-          </div>
         )}
 
-        {/* Product Grid */}
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <Spinner size="lg" color="green" />
-          </div>
-        ) : products.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-6xl mb-4">🌾</p>
-            <h2 className="text-lg font-semibold text-farm-dark">
-              No products found
-            </h2>
-            <p className="text-gray-500 text-sm mt-2">
-              {hasFilters
-                ? 'Try adjusting your filters.'
-                : 'No products are available right now.'}
-            </p>
-            {hasFilters && (
-              <button onClick={clearFilters}
-                className="mt-4 text-primary-600 text-sm hover:underline">
-                Clear all filters
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3
-                          lg:grid-cols-4 xl:grid-cols-5 gap-5">
-            {products.map(product => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={handleAddToCart}
-              />
-            ))}
-          </div>
-        )}
+        <Link to="/buyer/cart"
+          className="relative flex items-center gap-2 px-4 py-2.5 rounded-xl
+                     bg-primary-600 text-white text-sm font-semibold
+                     hover:bg-primary-700 transition-colors ml-auto">
+          <ShoppingCart className="w-4 h-4" />
+          Cart
+          {cartCount > 0 && (
+            <span className="w-5 h-5 bg-white text-primary-600 text-xs rounded-full
+                             flex items-center justify-center font-bold">
+              {cartCount > 9 ? '9+' : cartCount}
+            </span>
+          )}
+        </Link>
       </div>
 
-      <ChatWidget />
-    </div>
+      {/* Price filter */}
+      {showFilters && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-5
+                        flex items-center gap-4 flex-wrap animate-fade-in">
+          <p className="text-sm font-semibold text-gray-700">Price Range (UGX):</p>
+          <input type="number" placeholder="Min" value={minPrice}
+            onChange={e => setMinPrice(e.target.value)} className="input text-sm w-32" />
+          <span className="text-gray-400">–</span>
+          <input type="number" placeholder="Max" value={maxPrice}
+            onChange={e => setMaxPrice(e.target.value)} className="input text-sm w-32" />
+        </div>
+      )}
+
+      {/* Category pills */}
+      <div className="flex gap-2 flex-wrap mb-6 overflow-x-auto pb-1">
+        <button onClick={() => setCategory('')}
+          className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
+            !category ? 'bg-primary-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}>
+          All Products
+        </button>
+        {categories.map(c => (
+          <button key={c.id} onClick={() => setCategory(category == c.id ? '' : c.id)}
+            className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
+              category == c.id ? 'bg-primary-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}>
+            {c.icon} {c.name}
+            {c.product_count > 0 && <span className="ml-1 opacity-60 text-xs">({c.product_count})</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Results count */}
+      {!loading && (
+        <p className="text-sm text-gray-500 mb-4">
+          {products.length} product{products.length !== 1 ? 's' : ''}
+          {hasFilters && ' found'}
+        </p>
+      )}
+
+      {error && <div className="mb-5"><Alert type="error" message={error} /></div>}
+
+      {loading ? (
+        <div className="flex justify-center py-20"><Spinner size="xl" className="text-primary-600" /></div>
+      ) : products.length === 0 ? (
+        <EmptyState title="No products found"
+          description={hasFilters ? 'Try adjusting your filters or search term.' : 'No products available right now.'}
+          action={hasFilters && <Button variant="secondary" onClick={clearFilters}>Clear Filters</Button>} />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {products.map(p => <ProductCard key={p.id} product={p} onAdd={handleAdd} />)}
+        </div>
+      )}
+    </AppLayout>
   )
 }

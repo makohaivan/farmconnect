@@ -24,19 +24,24 @@ const queryClient = new QueryClient({
 })
 
 function AuthInitialiser() {
-  const { setAuth, setLoading } = useAuthStore()
+  const { accessToken, setAuth, setLoading } = useAuthStore()
   useEffect(() => {
     const restore = async () => {
+      // If no token exists, skip the API call entirely
+      // This prevents the 401 → refresh → redirect loop
+      if (!accessToken) {
+        setLoading(false)
+        return
+      }
       try {
         const user = await getMe()
         if (user) {
-          const token = useAuthStore.getState().accessToken || 'session-restored'
-          setAuth(user, token)
+          setAuth(user, accessToken)
         } else { setLoading(false) }
       } catch { setLoading(false) }
     }
     restore()
-  }, [])
+  }, [accessToken, setAuth, setLoading])
   return null
 }
 

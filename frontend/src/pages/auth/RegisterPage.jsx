@@ -1,321 +1,111 @@
-/**
- * FarmConnect — Register Page
- *
- * Two-step registration:
- * Step 1: Choose role (Farmer or Buyer)
- * Step 2: Fill in account details (fields change based on role)
- *
- * This approach makes registration feel guided and simple
- * rather than showing a long overwhelming form.
- */
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Mail, Lock, User, Phone, MapPin, Home, Wheat } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { Button, Input, Alert, Logo, Spinner } from '../../components/ui'
+import { Button, Input, Alert, Logo } from '../../components/ui'
 
-// ── Step 1 — Role Selection ────────────────────────────────────────────────────
-function RoleSelector({ selected, onSelect }) {
-  const roles = [
-    {
-      value:       'farmer',
-      icon:        '🌾',
-      title:       'I am a Farmer',
-      description: 'List your produce, manage orders, and sell directly to buyers across the country.',
-      benefits:    ['Set your own prices', 'No middlemen', 'Get paid faster'],
-    },
-    {
-      value:       'buyer',
-      icon:        '🛒',
-      title:       'I am a Buyer',
-      description: 'Browse fresh produce from verified local farmers and order directly to your door.',
-      benefits:    ['Fresh from the farm', 'Lower prices', 'Support local farmers'],
-    },
-  ]
-
+function RoleCard({ value, selected, onSelect, icon, title, description, perks }) {
   return (
-    <div className="space-y-4">
-      <div className="text-center mb-6">
-        <h2 className="text-xl font-bold text-farm-dark">How will you use FarmConnect?</h2>
-        <p className="text-gray-500 text-sm mt-1">Choose your account type to get started</p>
+    <button type="button" onClick={() => onSelect(value)}
+      className={`text-left w-full p-4 rounded-xl border-2 transition-all duration-150
+                  ${selected
+                    ? 'border-primary-500 bg-primary-50 shadow-md'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}>
+      <div className="flex items-start gap-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center
+                         text-xl shrink-0 ${
+          selected ? 'bg-primary-100' : 'bg-gray-100'
+        }`}>
+          {icon}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <p className={`font-semibold text-sm ${
+              selected ? 'text-primary-700' : 'text-gray-800'
+            }`}>
+              {title}
+            </p>
+            {selected && (
+              <span className="w-5 h-5 bg-primary-600 rounded-full flex
+                               items-center justify-center text-white text-xs">
+                ✓
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5 mb-2">{description}</p>
+          <div className="flex flex-wrap gap-1">
+            {perks.map(p => (
+              <span key={p} className="text-xs bg-gray-100 text-gray-600
+                                       px-2 py-0.5 rounded-full">
+                {p}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
-
-      <div className="grid grid-cols-1 gap-4">
-        {roles.map(role => (
-          <button
-            key={role.value}
-            type="button"
-            onClick={() => onSelect(role.value)}
-            className={`
-              text-left p-5 rounded-xl border-2 transition-all duration-150
-              hover:border-primary-400 hover:shadow-md
-              ${selected === role.value
-                ? 'border-primary-600 bg-primary-50 shadow-md'
-                : 'border-gray-200 bg-white'
-              }
-            `}
-          >
-            <div className="flex items-start gap-4">
-              <span className="text-3xl">{role.icon}</span>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-farm-dark">{role.title}</h3>
-                  {selected === role.value && (
-                    <span className="text-primary-600 font-bold text-lg">✓</span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">{role.description}</p>
-                <ul className="mt-3 space-y-1">
-                  {role.benefits.map(b => (
-                    <li key={b} className="flex items-center gap-2 text-xs text-gray-600">
-                      <span className="text-primary-600 font-bold">✓</span>
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
+    </button>
   )
 }
 
-// ── Step 2 — Account Details Form ──────────────────────────────────────────────
-function AccountForm({ role, formData, onChange, errors }) {
-  return (
-    <div className="space-y-4">
-      <div className="text-center mb-6">
-        <span className="text-4xl">{role === 'farmer' ? '🌾' : '🛒'}</span>
-        <h2 className="text-xl font-bold text-farm-dark mt-2">
-          {role === 'farmer' ? 'Farmer Account' : 'Buyer Account'}
-        </h2>
-        <p className="text-gray-500 text-sm mt-1">Fill in your details below</p>
-      </div>
-
-      {/* Name row */}
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label="First name"
-          id="first_name"
-          name="first_name"
-          placeholder="John"
-          value={formData.first_name}
-          onChange={onChange}
-          error={errors.first_name}
-          required
-          autoFocus
-        />
-        <Input
-          label="Last name"
-          id="last_name"
-          name="last_name"
-          placeholder="Doe"
-          value={formData.last_name}
-          onChange={onChange}
-          error={errors.last_name}
-          required
-        />
-      </div>
-
-      {/* Email */}
-      <Input
-        label="Email address"
-        id="email"
-        name="email"
-        type="email"
-        placeholder="you@example.com"
-        value={formData.email}
-        onChange={onChange}
-        error={errors.email}
-        required
-        autoComplete="email"
-      />
-
-      {/* Phone */}
-      <Input
-        label="Phone number"
-        id="phone"
-        name="phone"
-        type="tel"
-        placeholder="+256 700 000 000"
-        value={formData.phone}
-        onChange={onChange}
-        error={errors.phone}
-        hint="Used for order updates and notifications"
-      />
-
-      {/* Farmer-specific fields */}
-      {role === 'farmer' && (
-        <>
-          <Input
-            label="Farm name"
-            id="farm_name"
-            name="farm_name"
-            placeholder="e.g. Green Valley Farm"
-            value={formData.farm_name}
-            onChange={onChange}
-            error={errors.farm_name}
-            required
-            hint="This will be shown to buyers on your listings"
-          />
-          <Input
-            label="Farm location"
-            id="location"
-            name="location"
-            placeholder="e.g. Wakiso, Uganda"
-            value={formData.location}
-            onChange={onChange}
-            error={errors.location}
-            required
-            hint="Helps buyers find farms near them"
-          />
-        </>
-      )}
-
-      {/* Password */}
-      <Input
-        label="Password"
-        id="password"
-        name="password"
-        type="password"
-        placeholder="At least 8 characters"
-        value={formData.password}
-        onChange={onChange}
-        error={errors.password}
-        required
-        autoComplete="new-password"
-        hint="Minimum 8 characters"
-      />
-
-      {/* Confirm Password */}
-      <Input
-        label="Confirm password"
-        id="confirm_password"
-        name="confirm_password"
-        type="password"
-        placeholder="Repeat your password"
-        value={formData.confirm_password}
-        onChange={onChange}
-        error={errors.confirm_password}
-        required
-        autoComplete="new-password"
-      />
-    </div>
-  )
-}
-
-// ── Main Register Page ─────────────────────────────────────────────────────────
 export default function RegisterPage() {
   const { register } = useAuth()
-
-  const [step, setStep] = useState(1)   // 1 = role selection, 2 = form
-
-  const [formData, setFormData] = useState({
-    role:             '',
-    first_name:       '',
-    last_name:        '',
-    email:            '',
-    phone:            '',
-    farm_name:        '',
-    location:         '',
-    password:         '',
-    confirm_password: '',
+  const [step, setStep] = useState(1)
+  const [form, setForm] = useState({
+    role: '', email: '', first_name: '', last_name: '',
+    phone: '', farm_name: '', location: '',
+    password: '', confirm_password: ''
   })
-
   const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
-  const [errors,  setErrors]  = useState({})
+  const [error, setError]     = useState('')
+  const [errors, setErrors]   = useState({})
 
-  const handleChange = (e) => {
+  const handleChange = e => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }))
+    setForm(p => ({ ...p, [name]: value }))
+    if (errors[name]) setErrors(p => ({ ...p, [name]: '' }))
     if (error) setError('')
   }
 
-  const handleRoleSelect = (role) => {
-    setFormData(prev => ({ ...prev, role }))
-  }
-
-  // Step 1 validation — role must be selected
   const validateStep1 = () => {
-    if (!formData.role) {
-      setError('Please select an account type to continue.')
-      return false
-    }
-    setError('')
+    if (!form.role) { setError('Please choose an account type.'); return false }
     return true
   }
 
-  // Step 2 validation — all required fields
   const validateStep2 = () => {
-    const newErrors = {}
-
-    if (!formData.first_name.trim()) newErrors.first_name = 'First name is required.'
-    if (!formData.last_name.trim())  newErrors.last_name  = 'Last name is required.'
-
-    if (!formData.email) {
-      newErrors.email = 'Email is required.'
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address.'
-    }
-
-    if (formData.role === 'farmer') {
-      if (!formData.farm_name.trim()) newErrors.farm_name = 'Farm name is required.'
-      if (!formData.location.trim())  newErrors.location  = 'Farm location is required.'
-    }
-
-    if (!formData.password) {
-      newErrors.password = 'Password is required.'
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters.'
-    }
-
-    if (!formData.confirm_password) {
-      newErrors.confirm_password = 'Please confirm your password.'
-    } else if (formData.password !== formData.confirm_password) {
-      newErrors.confirm_password = 'Passwords do not match.'
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    const e = {}
+    if (!form.first_name.trim()) e.first_name = 'Required.'
+    if (!form.last_name.trim())  e.last_name  = 'Required.'
+    if (!form.email)             e.email      = 'Required.'
+    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Enter a valid email.'
+    if (form.role === 'farmer' && !form.farm_name.trim()) e.farm_name = 'Required.'
+    if (form.role === 'farmer' && !form.location.trim())  e.location  = 'Required.'
+    if (!form.password)          e.password    = 'Required.'
+    else if (form.password.length < 8) e.password = 'Min 8 characters.'
+    if (form.password !== form.confirm_password) e.confirm_password = 'Passwords do not match.'
+    setErrors(e)
+    return !Object.keys(e).length
   }
 
-  const handleNext = () => {
-    if (validateStep1()) setStep(2)
-  }
+  const handleNext = () => { if (validateStep1()) { setError(''); setStep(2) } }
 
-  const handleBack = () => {
-    setStep(1)
-    setError('')
-  }
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (!validateStep2()) return
-
     setLoading(true)
     setError('')
-
     try {
-      await register(formData)
-      // register() handles redirect
+      await register(form)
     } catch (err) {
-      // Handle server-side validation errors
       const serverErrors = err.response?.data?.errors
       if (serverErrors) {
-        // Map server errors to field-level errors
         const mapped = {}
-        Object.entries(serverErrors).forEach(([key, msgs]) => {
-          mapped[key] = Array.isArray(msgs) ? msgs[0] : msgs
+        Object.entries(serverErrors).forEach(([k, v]) => {
+          mapped[k] = Array.isArray(v) ? v[0] : v
         })
         setErrors(mapped)
       } else {
-        setError(
-          err.response?.data?.error ||
-          'Registration failed. Please try again.'
-        )
+        setError(err.response?.data?.error || 'Registration failed.')
       }
     } finally {
       setLoading(false)
@@ -323,106 +113,146 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-farm-light
-                    flex items-center justify-center p-4 py-10">
-      <div className="w-full max-w-lg fade-in">
-
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center
+                    p-4 py-10">
+      <div className="w-full max-w-lg animate-fade-up">
         {/* Logo */}
         <div className="text-center mb-6">
-          <div className="flex justify-center mb-3">
-            <Logo size="lg" />
-          </div>
+          <div className="flex justify-center mb-3"><Logo size="lg" /></div>
           <p className="text-gray-500 text-sm">Create your free account</p>
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center justify-center gap-3 mb-6">
+        <div className="flex items-center justify-center gap-2 mb-6">
           {[1, 2].map(s => (
-            <div key={s} className="flex items-center gap-3">
-              <div className={`
-                w-8 h-8 rounded-full flex items-center justify-center
-                text-sm font-semibold transition-colors
-                ${step >= s
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-200 text-gray-400'
-                }
-              `}>
+            <div key={s} className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center
+                               text-xs font-bold transition-all ${
+                step >= s
+                  ? 'bg-primary-600 text-white shadow-md'
+                  : 'bg-gray-200 text-gray-500'
+              }`}>
                 {step > s ? '✓' : s}
               </div>
               {s < 2 && (
-                <div className={`
-                  w-16 h-0.5 transition-colors
-                  ${step > s ? 'bg-primary-600' : 'bg-gray-200'}
-                `} />
+                <div className={`w-12 h-0.5 rounded transition-colors ${
+                  step > s ? 'bg-primary-500' : 'bg-gray-200'
+                }`} />
               )}
             </div>
           ))}
         </div>
 
-        {/* Form Card */}
         <div className="card p-8">
           <form onSubmit={handleSubmit} noValidate>
+            {error && <div className="mb-5"><Alert type="error" message={error} /></div>}
 
-            {/* Error alert */}
-            {error && <div className="mb-4"><Alert type="error" message={error} /></div>}
-
-            {/* Step 1 — Role selection */}
+            {/* STEP 1 — Role */}
             {step === 1 && (
-              <>
-                <RoleSelector
-                  selected={formData.role}
-                  onSelect={handleRoleSelect}
+              <div className="space-y-4 animate-fade-in">
+                <div className="mb-5">
+                  <h2 className="font-display font-bold text-xl text-gray-900">
+                    How will you use FarmConnect?
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Choose your account type to get started
+                  </p>
+                </div>
+
+                <RoleCard
+                  value="farmer" selected={form.role === 'farmer'}
+                  onSelect={r => setForm(p => ({ ...p, role: r }))}
+                  icon="🌾" title="I'm a Farmer"
+                  description="List your produce and sell directly to buyers"
+                  perks={['Set your own prices', 'No middlemen', 'Get paid faster']}
                 />
-                <Button
-                  type="button"
-                  onClick={handleNext}
-                  fullWidth
-                  size="lg"
-                  className="mt-6"
-                >
+                <RoleCard
+                  value="buyer" selected={form.role === 'buyer'}
+                  onSelect={r => setForm(p => ({ ...p, role: r }))}
+                  icon="🛒" title="I'm a Buyer"
+                  description="Browse fresh produce directly from farmers"
+                  perks={['Fresh from farm', 'Fair prices', 'Support local']}
+                />
+
+                <Button type="button" onClick={handleNext} fullWidth size="lg"
+                  className="mt-2">
                   Continue →
                 </Button>
-              </>
+              </div>
             )}
 
-            {/* Step 2 — Account details */}
+            {/* STEP 2 — Details */}
             {step === 2 && (
-              <>
-                <AccountForm
-                  role={formData.role}
-                  formData={formData}
-                  onChange={handleChange}
-                  errors={errors}
-                />
-                <div className="flex gap-3 mt-6">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={handleBack}
-                    className="w-32"
-                  >
+              <div className="space-y-4 animate-fade-in">
+                <div className="mb-5">
+                  <h2 className="font-display font-bold text-xl text-gray-900">
+                    {form.role === 'farmer' ? '🌾 Farmer Account' : '🛒 Buyer Account'}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">Fill in your details</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="First name" id="first_name" name="first_name"
+                    placeholder="John" value={form.first_name}
+                    onChange={handleChange} error={errors.first_name}
+                    icon={User} required autoFocus />
+                  <Input label="Last name" id="last_name" name="last_name"
+                    placeholder="Doe" value={form.last_name}
+                    onChange={handleChange} error={errors.last_name}
+                    icon={User} required />
+                </div>
+
+                <Input label="Email address" id="email" name="email" type="email"
+                  placeholder="you@example.com" value={form.email}
+                  onChange={handleChange} error={errors.email}
+                  icon={Mail} required autoComplete="email" />
+
+                <Input label="Phone number" id="phone" name="phone" type="tel"
+                  placeholder="+256 700 000 000" value={form.phone}
+                  onChange={handleChange} error={errors.phone}
+                  icon={Phone} />
+
+                {form.role === 'farmer' && (
+                  <>
+                    <Input label="Farm name" id="farm_name" name="farm_name"
+                      placeholder="e.g. Green Valley Farm" value={form.farm_name}
+                      onChange={handleChange} error={errors.farm_name}
+                      icon={Wheat} required />
+                    <Input label="Farm location" id="location" name="location"
+                      placeholder="e.g. Wakiso, Uganda" value={form.location}
+                      onChange={handleChange} error={errors.location}
+                      icon={MapPin} required />
+                  </>
+                )}
+
+                <Input label="Password" id="password" name="password" type="password"
+                  placeholder="At least 8 characters" value={form.password}
+                  onChange={handleChange} error={errors.password}
+                  icon={Lock} required hint="Minimum 8 characters" />
+
+                <Input label="Confirm password" id="confirm_password"
+                  name="confirm_password" type="password"
+                  placeholder="Repeat your password" value={form.confirm_password}
+                  onChange={handleChange} error={errors.confirm_password}
+                  icon={Lock} required />
+
+                <div className="flex gap-3 pt-1">
+                  <Button type="button" variant="secondary"
+                    onClick={() => setStep(1)} className="w-28">
                     ← Back
                   </Button>
-                  <Button
-                    type="submit"
-                    loading={loading}
-                    fullWidth
-                    size="lg"
-                  >
-                    {loading ? 'Creating account...' : 'Create Account'}
+                  <Button type="submit" loading={loading} fullWidth size="lg">
+                    {loading ? 'Creating account…' : 'Create Account'}
                   </Button>
                 </div>
-              </>
+              </div>
             )}
           </form>
 
-          {/* Login link */}
           <p className="text-center text-sm text-gray-500 mt-6">
             Already have an account?{' '}
-            <Link
-              to="/login"
-              className="text-primary-600 font-medium hover:text-primary-700 hover:underline"
-            >
+            <Link to="/login"
+              className="text-primary-600 font-semibold hover:text-primary-700">
               Sign in
             </Link>
           </p>

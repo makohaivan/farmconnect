@@ -7,6 +7,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 
 from .models import Order, OrderItem
+from apps.notifications.utils import notify_farmer_new_order, notify_buyer_status_change
 from .serializers import OrderSerializer, PlaceOrderSerializer
 from apps.accounts.models import User
 
@@ -86,6 +87,11 @@ def place_order(request):
                     product.save(update_fields=['quantity', 'is_available'])
 
                 orders_created.append(order)
+                # Notify farmer immediately
+                try:
+                    notify_farmer_new_order(order)
+                except Exception:
+                    pass
 
     except Exception as e:
         # Log the full error in the Django console
@@ -186,6 +192,11 @@ def update_order_status(request, order_id):
 
     order.status = new_status
     order.save()
+    # Notify buyer of status change
+    try:
+        notify_buyer_status_change(order, new_status)
+    except Exception:
+        pass
     return Response(OrderSerializer(order).data)
 
 
@@ -211,6 +222,12 @@ def cancel_order(request, order_id):
 
         order.status = 'cancelled'
         order.save()
+
+    # Notify buyer
+    try:
+        notify_buyer_status_change(order, 'cancelled')
+    except Exception:
+        pass
 
     return Response({'message': 'Order cancelled successfully.'})
 
